@@ -9,7 +9,7 @@ module TextEditor where
 import qualified Brick.AttrMap as A
 import qualified Brick.Main as M
 import qualified Brick.Types as T
-import Brick.Util (on)
+import Brick.Util (fg, on)
 import qualified Brick.Widgets.Center as C
 import Brick.Widgets.Core
   ( hLimit,
@@ -64,7 +64,7 @@ theApp =
 
 -- Look of the editor
 theMap :: A.AttrMap
-theMap = A.attrMap V.defAttr [(editAttr, V.white `on` V.black)]
+theMap = A.attrMap V.defAttr [(editAttr, V.white `on` V.black), (braceAttr, fg V.red)]
 
 -- Event handler of the editor
 appEvent :: T.BrickEvent Name e -> T.EventM Name State ()
@@ -135,12 +135,13 @@ renderEditor draw foc e =
       atChar = charAtCursor $ e ^. editContentsL
       atCharWidth = maybe 1 C.textWidth atChar
    in C.withAttr (if foc then editFocusedAttr else editAttr) $
-        limit $
-          viewport (e ^. editorNameL) T.Both $
-            (if foc then C.showCursor (e ^. editorNameL) cursorLoc else id) $
-              C.visibleRegion cursorLoc (atCharWidth, 1) $
-                draw $
-                  getEditContents e
+        C.withAttr (if (T.locationRow cursorLoc) == 1 then braceAttr else editAttr) $
+          limit $
+            viewport (e ^. editorNameL) T.Both $
+              (if foc then C.showCursor (e ^. editorNameL) cursorLoc else id) $
+                C.visibleRegion cursorLoc (atCharWidth, 1) $
+                  draw $
+                    getEditContents e
 
 -- Apply an editing operation to the editor's contents
 applyEdit :: (Z.TextZipper t -> Z.TextZipper t) -> Editor t n -> Editor t n
@@ -153,6 +154,10 @@ editAttr = A.attrName "edit"
 -- The attribute assigned to the editor when it has focus
 editFocusedAttr :: A.AttrName
 editFocusedAttr = editAttr <> A.attrName "focused"
+
+-- The attribute assigned to a characted when it is ( or )
+braceAttr :: A.AttrName
+braceAttr = A.attrName "brace"
 
 -- Get the contents of the editor.
 getEditContents :: Monoid t => Editor t n -> [t]
