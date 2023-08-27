@@ -145,16 +145,17 @@ renderEditor draw foc e =
 
 -- add syntax highlighting
 syntaxHighlight :: Editor String Name -> [String] -> T.Widget n
-syntaxHighlight e s = highlightString e (unlines s)
+syntaxHighlight e (s : ss) = highlightString e s C.<=> syntaxHighlight e ss
+syntaxHighlight _ [] = C.emptyWidget
 
 -- highlight in a string
 highlightString :: Editor String Name -> String -> T.Widget n
-highlightString e (c : cs) = highlightBraces e c C.<+> highlightString e cs
+highlightString e (c : cs) = highlightCharacter e c C.<+> highlightString e cs
 highlightString _ [] = C.emptyWidget
 
 -- highlight specific brace
-highlightBraces :: Editor String Name -> Char -> T.Widget n
-highlightBraces _ c
+highlightCharacter :: Editor String Name -> Char -> T.Widget n
+highlightCharacter _ c
   | c == '(' = C.withAttr braceAttr (str "(")
   | c == ')' = C.withAttr braceAttr (str ")")
   | otherwise = str [c]
