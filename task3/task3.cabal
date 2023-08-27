@@ -36,6 +36,7 @@ executable task3
         bytestring,
         directory,
         filepath,
+        lens,
         microlens,
         microlens-mtl,
         microlens-th,

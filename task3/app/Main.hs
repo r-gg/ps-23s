@@ -1,9 +1,15 @@
 module Main where
 
-import Lens.Micro
+import Lens.Micro ( (^.) )
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath.Posix (takeDirectory)
 import TextEditor
+    ( State(State),
+      Name(Edit),
+      editorState,
+      open,
+      editor,
+      getEditContents )
 
 main :: IO ()
 main = do
@@ -29,4 +35,4 @@ main = do
 save :: String -> TextEditor.State -> IO ()
 save filePath state = do
   createDirectoryIfMissing True $ takeDirectory filePath
-  writeFile filePath (head (TextEditor.getEditContents (state ^. TextEditor.editorState)))
+  writeFile filePath (unlines (TextEditor.getEditContents (state ^. TextEditor.editorState)))

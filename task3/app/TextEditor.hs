@@ -21,15 +21,16 @@ import Brick.Widgets.Core
     viewport,
   )
 import qualified Brick.Widgets.Core as C
+import Control.Lens (element)
 import qualified Data.Text.Zipper as Z hiding (textZipper)
 import qualified Data.Text.Zipper.Generic as Z
 import qualified Data.Text.Zipper.Generic.Words as Z
 import Data.Tuple (swap)
 import Graphics.Vty (Event (..), Key (..), Modifier (..))
 import qualified Graphics.Vty as V
-import Lens.Micro
-import Lens.Micro.Mtl
-import Lens.Micro.TH
+import Lens.Micro (to, (%~), (&), (^.), (^?), _1, _2)
+import Lens.Micro.Mtl (zoom)
+import Lens.Micro.TH (makeLenses)
 
 data Name = Edit | SyntaxHighlight deriving (Ord, Show, Eq)
 
@@ -43,7 +44,7 @@ instance C.Named (Editor t n) n where
 
 newtype State = State {_editorState :: Editor String Name}
 
-makeLenses ''State
+Lens.Micro.TH.makeLenses ''State
 T.suffixLenses ''Editor
 
 -- Opens the editor
@@ -145,20 +146,39 @@ renderEditor draw foc e =
 
 -- add syntax highlighting
 syntaxHighlight :: Editor String Name -> [String] -> T.Widget n
-syntaxHighlight e (s : ss) = highlightString e s C.<=> syntaxHighlight e ss
-syntaxHighlight _ [] = C.emptyWidget
+syntaxHighlight e = syntaxHighlight' e 0
 
--- highlight in a string
-highlightString :: Editor String Name -> String -> T.Widget n
-highlightString e (c : cs) = highlightCharacter e c C.<+> highlightString e cs
-highlightString _ [] = C.emptyWidget
+syntaxHighlight' :: Editor String Name -> Int -> [String] -> T.Widget n
+syntaxHighlight' e rowPos (s : ss) = syntaxHighlight'' e rowPos 0 s C.<=> syntaxHighlight' e (rowPos + 1) ss
+syntaxHighlight' _ _ [] = str "\n"
 
--- highlight specific brace
-highlightCharacter :: Editor String Name -> Char -> T.Widget n
-highlightCharacter _ c
-  | c == '(' = C.withAttr braceAttr (str "(")
-  | c == ')' = C.withAttr braceAttr (str ")")
+syntaxHighlight'' :: Editor String Name -> Int -> Int -> String -> T.Widget n
+syntaxHighlight'' e rowPos colPos (c : cs) = syntaxHighlight''' e rowPos colPos c C.<+> syntaxHighlight'' e rowPos (colPos + 1) cs
+syntaxHighlight'' _ _ _ [] = str "\n"
+
+syntaxHighlight''' :: Editor String Name -> Int -> Int -> Char -> T.Widget n
+syntaxHighlight''' e rowPos colPos c
+  | markBrace e rowPos colPos = C.withAttr braceAttr (str [c])
   | otherwise = str [c]
+
+markBrace :: Editor String Name -> Int -> Int -> Bool
+markBrace e rowPos colPos
+  | cp && cpChar == (Just '(') = True
+  | not cp && cpChar == (Just '(') && currChar == (Just ')') = True
+  | cp && cpChar == (Just ')') = True
+  | not cp && cpChar == (Just ')') && currChar == (Just '(') = True
+  | otherwise = False  
+  where
+    cp = fst (getCursorPosition e) == rowPos && snd (getCursorPosition e) == colPos
+    cpRow = Z.getText (e ^. editContentsL) ^? element (fst (getCursorPosition e))
+    cpChar = case cpRow of
+      (Just cpr) -> cpr ^? element (snd (getCursorPosition e))
+      Nothing -> Nothing
+
+    currRow = Z.getText (e ^. editContentsL) ^? element rowPos
+    currChar = case currRow of
+      (Just cr) -> cr ^? element colPos
+      Nothing -> Nothing
 
 -- Apply an editing operation to the editor's contents
 applyEdit :: (Z.TextZipper t -> Z.TextZipper t) -> Editor t n -> Editor t n
