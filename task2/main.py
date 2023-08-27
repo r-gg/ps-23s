@@ -65,6 +65,11 @@ fns = {
         "cond" : lambda x: lambda y: lambda z: y if (x != 0) else z # instead y do eval_expr(y) and eval_expr(z) respectively
     }
 
+functions = {
+    "mult" : CoreFunction("mult", lambda_fn=lambda input: input['x'] * input['y']),
+    "plus" : CoreFunction("plus", lambda_fn=lambda input: input['x'] + input['y']),
+}
+
 def eval_expr(expr : Tree):
     if (expr.data == "create_fn"):
         return {"expr" : eval_create_fn(expr, [])}
