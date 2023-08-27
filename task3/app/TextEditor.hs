@@ -38,14 +38,14 @@ data Editor t n = Editor
 instance C.Named (Editor t n) n where
   getName = editorName
 
-data State = State {_editorState :: Editor String Name}
+newtype State = State {_editorState :: Editor String Name}
 
 makeLenses ''State
 T.suffixLenses ''Editor
 
 -- Opens the editor
 open :: State -> IO State
-open st = M.defaultMain theApp st
+open = M.defaultMain theApp
 
 -- Construct an editor
 editor :: Z.GenericTextZipper a => n -> Maybe Int -> a -> Editor a n
@@ -120,7 +120,7 @@ drawUI st = [ui]
 
 -- calls the renderEditor function
 render :: Editor String Name -> T.Widget Name
-render e = renderEditor (str . unlines) True e
+render = renderEditor syntaxHighlight True
 
 -- Turn an editor state value into a widget.
 renderEditor :: (Ord n, Show n, Monoid t, C.TextWidth t, Z.GenericTextZipper t) => ([t] -> T.Widget n) -> Bool -> Editor t n -> T.Widget n
@@ -129,19 +129,25 @@ renderEditor draw foc e =
       z = e ^. editContentsL
       toLeft = Z.take (cp ^. _2) (Z.currentLine z)
       cursorLoc = T.Location (C.textWidth toLeft, cp ^. _1)
-      limit = case e ^. editContentsL . to Z.getLineLimit of
-        Nothing -> id
-        Just lim -> vLimit lim
+      limit = maybe id vLimit (e ^. editContentsL . to Z.getLineLimit)
       atChar = charAtCursor $ e ^. editContentsL
       atCharWidth = maybe 1 C.textWidth atChar
    in C.withAttr (if foc then editFocusedAttr else editAttr) $
-        C.withAttr (if (T.locationRow cursorLoc) == 1 then braceAttr else editAttr) $
-          limit $
-            viewport (e ^. editorNameL) T.Both $
-              (if foc then C.showCursor (e ^. editorNameL) cursorLoc else id) $
-                C.visibleRegion cursorLoc (atCharWidth, 1) $
-                  draw $
-                    getEditContents e
+        limit $
+          viewport (e ^. editorNameL) T.Both $
+            (if foc then C.showCursor (e ^. editorNameL) cursorLoc else id) $
+              C.visibleRegion cursorLoc (atCharWidth, 1) $
+                draw $
+                  getEditContents e
+
+-- add syntax highlighting
+syntaxHighlight :: [String] -> T.Widget n
+syntaxHighlight s = highlight (unlines s)
+
+highlight :: String -> T.Widget n
+highlight ('(' : cs) = C.withAttr braceAttr (str ['(']) C.<+> highlight cs
+highlight (c : cs) = str [c] C.<+> highlight cs
+highlight [] = C.emptyWidget
 
 -- Apply an editing operation to the editor's contents
 applyEdit :: (Z.TextZipper t -> Z.TextZipper t) -> Editor t n -> Editor t n
