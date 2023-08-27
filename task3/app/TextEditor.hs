@@ -3,6 +3,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Redundant bracket" #-}
 
 module TextEditor where
 
@@ -120,7 +123,7 @@ drawUI st = [ui]
 
 -- calls the renderEditor function
 render :: Editor String Name -> T.Widget Name
-render = renderEditor syntaxHighlight True
+render e = renderEditor (syntaxHighlight e) True e
 
 -- Turn an editor state value into a widget.
 renderEditor :: (Ord n, Show n, Monoid t, C.TextWidth t, Z.GenericTextZipper t) => ([t] -> T.Widget n) -> Bool -> Editor t n -> T.Widget n
@@ -141,13 +144,20 @@ renderEditor draw foc e =
                   getEditContents e
 
 -- add syntax highlighting
-syntaxHighlight :: [String] -> T.Widget n
-syntaxHighlight s = highlight (unlines s)
+syntaxHighlight :: Editor String Name -> [String] -> T.Widget n
+syntaxHighlight e s = highlightString e (unlines s)
 
-highlight :: String -> T.Widget n
-highlight ('(' : cs) = C.withAttr braceAttr (str ['(']) C.<+> highlight cs
-highlight (c : cs) = str [c] C.<+> highlight cs
-highlight [] = C.emptyWidget
+-- highlight in a string
+highlightString :: Editor String Name -> String -> T.Widget n
+highlightString e (c : cs) = highlightBraces e c C.<+> highlightString e cs
+highlightString _ [] = C.emptyWidget
+
+-- highlight specific brace
+highlightBraces :: Editor String Name -> Char -> T.Widget n
+highlightBraces _ c
+  | c == '(' = C.withAttr braceAttr (str "(")
+  | c == ')' = C.withAttr braceAttr (str ")")
+  | otherwise = str [c]
 
 -- Apply an editing operation to the editor's contents
 applyEdit :: (Z.TextZipper t -> Z.TextZipper t) -> Editor t n -> Editor t n
