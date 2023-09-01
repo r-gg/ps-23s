@@ -9,7 +9,8 @@ from lark import Lark, Transformer, v_args, Tree, Token
 import numpy as np
 from elements import *
 from transformer import *
-
+from evaluator import *
+from printer import to_str
 import uuid
 
 
@@ -19,11 +20,12 @@ def get_new_fn_name() -> str:
 anon_fn_registry = {}
 
 fns = {
-        "mult" : lambda x: lambda y: x * y,
-        "div" : lambda x: lambda y: x / y,
-        "plus" : lambda x: lambda y: x + y,
-        "minus" : lambda x: lambda y: x - y,
-        "cond" : lambda x: lambda y: lambda z: y if (x != 0) else z # instead y do eval_expr(y) and eval_expr(z) respectively
+        "mult" : lambda x, y: x * y,
+        "div" : lambda x, y: x / y,
+        "plus" : lambda x, y: x + y,
+        "minus" : lambda x, y: x - y,
+        # "cond" : lambda x, y, z: y if (x != 0) else z # TODO: cond logic should be implemented in evaluation, the only function that should be used is check cond
+        "check_cond" : lambda x: x != 0
     }
 
 functions = {
@@ -31,6 +33,9 @@ functions = {
     "plus" : CoreFunction(name="plus",  bound_vars={'x':None, 'y':None} , lambda_fn=lambda input: input['x'] + input['y']),
     "sqrt" : CoreFunction(name="sqrt", bound_vars={'x':None} , lambda_fn=lambda input: input['x'] * input['x'])
 }
+
+# Environment for pairs
+env : Dict[str,object] = {}
 
 
 aliases_registry = {
@@ -48,12 +53,16 @@ if __name__ == '__main__':
         data = file.read()
         l = Lark('''
                     start: expr
+                        
+                    
+                    env: "{ " pairs " }" -> create_env 
+                        | "{" pairs "}" -> create_env 
                     
                     expr: apply 
                         | WORD " -> " expr  -> create_fn
                         | WORD "->" expr -> create_fn  
                     
-                    apply: basic   -> apply_fn
+                    apply: basic   -> apply_basic
                         | apply " " basic    -> apply_fn_multiple
                     
                     basic: INT -> basic_int
@@ -73,8 +82,13 @@ if __name__ == '__main__':
         print(l.parse(data).pretty("-"))
         res = l.parse(data)
         r = eval_start(res)
-        print(res)
-        test = Function(name="sqr", bound_vars={'x':None},inner_fn=functions['mult'], var_mapping={'x':'x', 'y':'x'})
-        print("Evaluating test:")
-        print(test.evaluate({'x' : Expression(is_fully_evaluated=True, value=2)}))
+        print(r)
+        print("Evaluating with evaluator:")
+        evaluated = eval_expression(r, {})
+        print(evaluated)
+        print(to_str(evaluated))
+
+        # test = Function(name="sqr", bound_vars={'x':None},inner_fn=functions['mult'], var_mapping={'x':'x', 'y':'x'})
+        # print("Evaluating test:")
+        # print(test.evaluate({'x' : Expression(is_fully_evaluated=True, value=2)}))
 
