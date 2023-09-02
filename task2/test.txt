@@ -1,1 +1,1 @@
-(x->y->plus (mult x x) y) 2
+minus ((x -> y -> plus (mult x x) y) 2 5) ((x -> y -> plus (mult x x) y) 2 3)

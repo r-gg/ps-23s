@@ -1,21 +1,21 @@
-from main import *
+from global_vars import *
 from typing import Dict, List
 
-fns = {
-        "mult" : lambda x, y: x * y,
-        "div" : lambda x, y: x / y,
-        "plus" : lambda x, y: x + y,
-        "minus" : lambda x, y: x - y,
-        # "cond" : lambda x, y, z: y if (x != 0) else z # TODO: cond logic should be implemented in evaluation, the only function that should be used is check cond
-        "check_cond" : lambda x: x != 0
-    }
+
+# Sets global variables/aliases
+def eval_env(env: Dict):
+    pairs = env['pairs']
+    for pair in pairs:
+        environment[pair['name']] = eval_expression(pair['value'] , {})
+
 
 # variables that are set in this context are passed to evaluation
 def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
     # Base cases
     type = input['type']
     if type == 'start':
-        # TODO: Eval env first then expr
+        if input['env'] != {}:
+            eval_env(input['env'])
         return eval_expression(input['expr'], {})
     elif type == 'basic_int':
         return input
@@ -26,6 +26,12 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             return res
         else:
             return input
+    elif type == 'unknown_basic':
+        if input['value'] in environment.keys():
+            return eval_expression(environment[input['value']], set_vars_in_context)  # replace from the environment
+        else:
+            raise Exception(f"Unknown basic: {input}")
+
 
     elif type == 'core_fn':  # This is a core function without params
         fn_name = input['name']
@@ -36,15 +42,20 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         inner = input['inner']
         inner_type = inner['type']
         if (inner_type == 'core_fn') and ('evaluation_status' in inner.keys()) and (inner['evaluation_status'] == 'partial'):
-            params = inner['params']
+            params : List[Dict] = inner['params']
             new_param_was_set = False
+            res_params = []
             for p in params:
                 # if there was a new param set
                 if p['type'] == 'basic_word_var':
                     if p['value'] in set_vars_in_context:
                         new_param_was_set = True
-                        params.remove(p)
-                        params.append(set_vars_in_context[p['value']])
+                        p = set_vars_in_context[p['value']]
+                        res_params.append(p)
+                else:
+                    res_params.append(p)
+            params = res_params
+
             # check if it can be evaluated only if new param was set
             if new_param_was_set and all([p['type'] == 'basic_int' for p in params]):  # Can be evaluated
                 fn_name = inner['name']
@@ -77,6 +88,9 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             # TODO: Evaluate the inner expr first and then set the parameter and then evaluate this fn call again
             # Keep evaluating until the inner fn type changes to anon_fn or core_fn
             input['function'] = eval_expression(function, set_vars_in_context)
+
+            # Inner function can also return an int? TODO
+
             # if ('evaluation_status' in input['function'].keys()) and input['function']['evaluation_status'] == 'partial':
             #     return input['function']
             return eval_expression(input, set_vars_in_context)
@@ -90,6 +104,12 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             else:
                 return res
 
+        elif inner_fn_type == 'unknown_basic':
+            if function['value'] in environment.keys():
+                input['function'] = environment[function['value']] # replace from the environment
+                return eval_expression(input, set_vars_in_context)
+            else:
+                raise Exception(f"Unknown basic: {function}")
 
         elif inner_fn_type == 'core_fn':
             fn_name = function['name']
