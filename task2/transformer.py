@@ -1,6 +1,6 @@
 from lark import Tree
 from typing import List, Dict
-from global_vars import *
+import global_vars
 import copy
 
 fns = {
@@ -41,8 +41,8 @@ def eval_basic(basic: Tree, bound_vars: List[str]) -> Dict:
         if val in bound_vars:
             return {"type": "basic_word_var", "value": val}
 
-        if val in environment.keys():
-            return environment[val]  # Immediately replacing aliases
+        if val in global_vars.environment.keys():
+            return global_vars.environment[val]  # Immediately replacing aliases
 
         return {"type": "unknown_basic",
                 "value": basic.children[0].value}

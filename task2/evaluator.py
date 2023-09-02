@@ -1,12 +1,14 @@
-from global_vars import *
+import copy
+
+import global_vars
 from typing import Dict, List
 
-
+from printer import to_str
 # Sets global variables/aliases
 def eval_env(env: Dict):
     pairs = env['pairs']
     for pair in pairs:
-        environment[pair['name']] = eval_expression(pair['value'] , {})
+        global_vars.environment[pair['name']] = eval_expression(pair['value'] , {})
 
 
 # variables that are set in this context are passed to evaluation
@@ -27,25 +29,22 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         else:
             return input
     elif type == 'unknown_basic':
-        if input['value'] in environment.keys():
-            return eval_expression(environment[input['value']], set_vars_in_context)  # replace from the environment
+        if input['value'] in global_vars.environment.keys():
+            return eval_expression(global_vars.environment[input['value']], set_vars_in_context)  # replace from the global_vars.environment
         else:
             raise Exception(f"Unknown basic: {input}")
 
 
     elif type == 'core_fn':  # This is a core function without params
         fn_name = input['name']
-        return fns[fn_name]()
-
-    elif type == 'anon_fn':
-        # Higher order functions # e.g function as a parameter
-        inner = input['inner']
-        inner_type = inner['type']
-        if (inner_type == 'core_fn') and ('evaluation_status' in inner.keys()) and (inner['evaluation_status'] == 'partial'):
-            params : List[Dict] = inner['params']
+        if 'evaluation_status' in input.keys() and input['evaluation_status'] == 'partial':
+            params: List[Dict] = input['params']
             new_param_was_set = False
             res_params = []
             for p in params:
+                if p['type'] != 'basic_word_var':
+                    evaluated_param = eval_expression(p, set_vars_in_context)
+                    p = evaluated_param
                 # if there was a new param set
                 if p['type'] == 'basic_word_var':
                     if p['value'] in set_vars_in_context:
@@ -58,12 +57,47 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
 
             # check if it can be evaluated only if new param was set
             if new_param_was_set and all([p['type'] == 'basic_int' for p in params]):  # Can be evaluated
-                fn_name = inner['name']
+                fn_name = input['name']
                 args = [p['value'] for p in params]
-                result_int = fns[fn_name](*args)
+                result_int = global_vars.fns[fn_name](*args)
                 return {"type": "basic_int", "value": result_int}
             if new_param_was_set:
-                inner['params'] = params # update inner params
+                input['params'] = params  # update inner params
+
+            return input
+
+
+        print("Core fn uncaught")
+
+    elif type == 'anon_fn':
+        # Higher order functions # e.g function as a parameter
+        inner = input['inner']
+        inner_type = inner['type']
+        if (inner_type == 'core_fn') and ('evaluation_status' in inner.keys()) and (inner['evaluation_status'] == 'partial'):
+            params : List[Dict] = inner['params']
+            new_param_was_set = False
+            res_params = []
+            for p in params:
+                if p['type'] != 'basic_word_var':
+                    evaluated_param = eval_expression(p, set_vars_in_context)
+                    p = evaluated_param
+                # if there was a new param set
+                if p['type'] == 'basic_word_var':
+                    if p['value'] in set_vars_in_context:
+                        new_param_was_set = True
+                        p = set_vars_in_context[p['value']]
+
+                res_params.append(p)
+            params = res_params
+
+            # check if it can be evaluated only if new param was set
+            if new_param_was_set and all([p['type'] == 'basic_int' for p in params]):  # Can be evaluated
+                fn_name = inner['name']
+                args = [p['value'] for p in params]
+                result_int = global_vars.fns[fn_name](*args)
+                return {"type": "basic_int", "value": result_int}
+
+            inner['params'] = params # update inner params
 
             return input
         else:
@@ -81,8 +115,8 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
 
         function = input['function']
         inner_fn_type = function['type']
-        param = eval_expression(input['param'], set_vars_in_context)
 
+        param = eval_expression(input['param'], set_vars_in_context)
 
         if inner_fn_type == 'fn_call':
             # TODO: Evaluate the inner expr first and then set the parameter and then evaluate this fn call again
@@ -97,16 +131,18 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
 
         elif inner_fn_type == 'anon_fn':
             bound_var = function['bound_var']
-            set_vars_in_context[bound_var] = param
-            res = eval_expression(function, set_vars_in_context)
+            new_set_vars_in_context = copy.copy(set_vars_in_context)
+
+            new_set_vars_in_context[bound_var] = param
+            res = eval_expression(function, new_set_vars_in_context)
             if (res['type'] == 'anon_fn') and (res['bound_var'] == bound_var):
                 return res['inner']
             else:
                 return res
 
         elif inner_fn_type == 'unknown_basic':
-            if function['value'] in environment.keys():
-                input['function'] = environment[function['value']] # replace from the environment
+            if function['value'] in global_vars.environment.keys():
+                input['function'] = global_vars.environment[function['value']] # replace from the global_vars.environment
                 return eval_expression(input, set_vars_in_context)
             else:
                 raise Exception(f"Unknown basic: {function}")
@@ -122,7 +158,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
 
                 if all([p['type'] == 'basic_int' for p in params]):  # Can be evaluated
                     args = [p['value'] for p in params]
-                    result_int = fns[fn_name](*args)
+                    result_int = global_vars.fns[fn_name](*args)
                     return {"type": "basic_int", "value": result_int}
                 else:
                     function['params'] = params
@@ -134,7 +170,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                 # return fncall with another param added if params length is 1
                 function['params'].append(param)
                 return function
-            else:
+            elif fn_name == 'cond':
                 params = function['params'] + [param]
                 assert (len(params) == 3) and (fn_name == 'cond')
                 # TODO: Implement
@@ -142,6 +178,9 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                 # otherwise (if its a core_fn) evaluate params and if they are ints evaluate core fn
                 # TODO: Later add partial evaluation of 'cond' function (if condition is satisfied/not satisfied that one does not require the unused param to be evaluated
                 #       the condition must in any case be evaluated
+                print("Cond happened")
                 pass
-
+            else:
+                print("Core fn in fn call that satisfies nothing probably from the environment !")
+        print("Something slipped")
         pass

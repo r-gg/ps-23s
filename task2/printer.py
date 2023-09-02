@@ -8,7 +8,7 @@ def to_str(input : Dict) -> str:
     if type == 'basic_int':
         return str(input['value'])
     elif type == 'fn_call':
-        return to_str(input['function']) + " " + to_str(input['param'])
+        return to_str(input['function']) + " " + if_basic_dont_wrap(input['param'])
     elif type == 'anon_fn':
         return f"({input['bound_var']}->{to_str(input['inner'])})"
     elif type == 'basic_word_var':
