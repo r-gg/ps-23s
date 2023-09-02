@@ -68,7 +68,7 @@ theApp =
 
 -- Look of the editor
 theMap :: A.AttrMap
-theMap = A.attrMap V.defAttr [(editAttr, V.white `on` V.black), (braceAttr, fg V.red)]
+theMap = A.attrMap V.defAttr [(editAttr, V.white `on` V.black), (bracketAttr, fg V.red)]
 
 -- Event handler of the editor
 appEvent :: T.BrickEvent Name e -> T.EventM Name State ()
@@ -158,27 +158,76 @@ syntaxHighlight'' _ _ _ [] = str "\n"
 
 syntaxHighlight''' :: Editor String Name -> Int -> Int -> Char -> T.Widget n
 syntaxHighlight''' e rowPos colPos c
-  | markBrace e rowPos colPos = C.withAttr braceAttr (str [c])
+  | firstMatch e '(' ')' == (rowPos, colPos) = C.withAttr bracketAttr (str [c])
+  | lastMatch e '(' ')' == (rowPos, colPos) = C.withAttr bracketAttr (str [c])
+  | cursorPositionWord e == (currentPositionWord e rowPos colPos) = C.withAttr bracketAttr (str [c])
   | otherwise = str [c]
 
-markBrace :: Editor String Name -> Int -> Int -> Bool
-markBrace e rowPos colPos
-  | cp && cpChar == (Just '(') = True
-  | not cp && cpChar == (Just '(') && currChar == (Just ')') = True
-  | cp && cpChar == (Just ')') = True
-  | not cp && cpChar == (Just ')') && currChar == (Just '(') = True
-  | otherwise = False  
-  where
-    cp = fst (getCursorPosition e) == rowPos && snd (getCursorPosition e) == colPos
-    cpRow = Z.getText (e ^. editContentsL) ^? element (fst (getCursorPosition e))
-    cpChar = case cpRow of
-      (Just cpr) -> cpr ^? element (snd (getCursorPosition e))
-      Nothing -> Nothing
+firstMatch :: Editor String Name -> Char -> Char -> (Int, Int)
+firstMatch e openChar closeChar = if null (matches e openChar closeChar) then (-1, -1) else head (matches e openChar closeChar)
 
-    currRow = Z.getText (e ^. editContentsL) ^? element rowPos
-    currChar = case currRow of
-      (Just cr) -> cr ^? element colPos
-      Nothing -> Nothing
+lastMatch :: Editor String Name -> Char -> Char -> (Int, Int)
+lastMatch e closeChar openChar = if null (matches e closeChar openChar) then (-1, -1) else head (matches e closeChar openChar)
+
+matches :: Editor String Name -> Char -> Char -> [(Int, Int)]
+matches e closeChar openChar = [(r, c) | r <- [0 .. fst (getCursorPosition e)], c <- [0 .. snd (getCursorPosition e)], (cursorPositionCharMaybe e) == (Just openChar) && (currentPositionCharMaybe e r c) == (Just closeChar)]
+
+rows :: Editor String Name -> Int
+rows e = length (Z.getText $ e ^. editContentsL)
+
+cols :: Editor String Name -> Int -> Int
+cols e row = length (currentPositionRow e row)
+
+isCurrentCursorPosition :: Editor String Name -> Int -> Int -> Bool
+isCurrentCursorPosition e rowPos colPos = fst (getCursorPosition e) == rowPos && snd (getCursorPosition e) == colPos
+
+cursorPositionRowMaybe :: Editor String Name -> Maybe String
+cursorPositionRowMaybe e = Z.getText (e ^. editContentsL) ^? element (fst (getCursorPosition e))
+
+cursorPositionRow :: Editor String Name -> String
+cursorPositionRow e =
+  case cursorPositionRowMaybe e of
+    (Just r) -> r
+    Nothing -> []
+
+cursorPositionCharMaybe :: Editor String Name -> Maybe Char
+cursorPositionCharMaybe e =
+  case cursorPositionRowMaybe e of
+    (Just cpr) -> cpr ^? element (snd (getCursorPosition e))
+    Nothing -> Nothing
+
+cursorPositionChar :: Editor String Name -> Char
+cursorPositionChar e =
+  case cursorPositionCharMaybe e of
+    (Just c) -> c
+    Nothing -> ' '
+
+cursorPositionWord :: Editor String Name -> String
+cursorPositionWord e = (takeWhile (/= ' ') [currentPositionChar e (fst (getCursorPosition e)) c | c <- [0 .. snd (getCursorPosition e)]]) ++ (takeWhile (/= ' ') [currentPositionChar e (fst (getCursorPosition e)) c | c <- [snd (getCursorPosition e) + 1 .. (cols e (fst (getCursorPosition e)))]])
+
+currentPositionRowMaybe :: Editor String Name -> Int -> Maybe String
+currentPositionRowMaybe e rowPos = Z.getText (e ^. editContentsL) ^? element rowPos
+
+currentPositionRow :: Editor String Name -> Int -> String
+currentPositionRow e rowPos =
+  case currentPositionRowMaybe e rowPos of
+    (Just r) -> r
+    Nothing -> []
+
+currentPositionCharMaybe :: Editor String Name -> Int -> Int -> Maybe Char
+currentPositionCharMaybe e rowPos colPos =
+  case currentPositionRowMaybe e rowPos of
+    (Just cr) -> cr ^? element colPos
+    Nothing -> Nothing
+
+currentPositionChar :: Editor String Name -> Int -> Int -> Char
+currentPositionChar e rowPos colPos =
+  case currentPositionCharMaybe e rowPos colPos of
+    (Just c) -> c
+    Nothing -> ' '
+
+currentPositionWord :: Editor String Name -> Int -> Int -> String
+currentPositionWord e rowPos colPos = [currentPositionChar e rowPos c | c <- [0 .. colPos]] ++ [currentPositionChar e rowPos c | c <- [colPos .. (cols e rowPos)]]
 
 -- Apply an editing operation to the editor's contents
 applyEdit :: (Z.TextZipper t -> Z.TextZipper t) -> Editor t n -> Editor t n
@@ -193,8 +242,8 @@ editFocusedAttr :: A.AttrName
 editFocusedAttr = editAttr <> A.attrName "focused"
 
 -- The attribute assigned to a characted when it is ( or )
-braceAttr :: A.AttrName
-braceAttr = A.attrName "brace"
+bracketAttr :: A.AttrName
+bracketAttr = A.attrName "bracket"
 
 -- Get the contents of the editor.
 getEditContents :: Monoid t => Editor t n -> [t]
