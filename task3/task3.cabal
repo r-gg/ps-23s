@@ -41,6 +41,7 @@ executable task3
         microlens-mtl,
         microlens-th,
         mtl,
+        parsec,
         text,
         text-conversions,
         text-zipper,
