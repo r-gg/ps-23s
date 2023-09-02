@@ -1,1 +1,1 @@
-{rec = 2} (x->plus x x) 1
+minus ((x -> y -> plus (mult x x) y) 2 5) ((x -> y -> plus (mult x x) y) 2 3)
