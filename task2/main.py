@@ -51,6 +51,8 @@ def get_output(data: str):
                              | WORD "=" expr   -> create_final_pair
                              | pairs ", " WORD "=" expr  -> create_pair
                              | pairs ", " WORD " = " expr  -> create_pair
+                             | " " -> blank_pair
+                             |  -> blank_pair
 
                         %import common.WORD   // imports from terminal library
                         %import common.INT    // imports from terminal library

@@ -65,6 +65,46 @@ class MyTestCase(unittest.TestCase):
                 '{a=x->y->plus (mult x x) y, b=a 2, c=b 3} minus (b 5) c')
         )
 
+    def test_cond_basic(self):
+        self.assertEqual(
+            '1',
+            get_output('cond 1 1 2')
+        )
+
+        self.assertEqual(
+            '2',
+            get_output('cond 0 1 2')
+        )
+
+        self.assertEqual(
+            '2',
+            get_output('cond {} 1 2')
+        )
+
+        self.assertEqual(
+            '1',
+            get_output('cond {a = 3} 1 2')
+        )
+
+
+    def test_cond_simple(self):
+        self.assertEqual(
+            '{a = cond {} 1 2} 2',
+            get_output('{a = cond {} 1 2} a')
+        )
+
+        self.assertEqual(
+            '{a = (x->cond {} 1 x)} 2',
+            get_output('{a = x->cond {} 1 x} a 2')
+        )
+
+
+        # a gets evaluated in eval_env to 1. it should be a = x->1
+        self.assertEqual(
+            '{a = (x->cond 2 1 x)} 1',
+            get_output('{a = x->cond 2 1 x} a 2')
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

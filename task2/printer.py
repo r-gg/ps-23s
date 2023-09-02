@@ -25,7 +25,7 @@ def to_str(input : Dict) -> str:
 
 
 def if_basic_dont_wrap(p):
-    if "basic" in p['type']:
+    if "basic" in p['type'] or 'record' in p['type']:
         return to_str(p)
     else:
         return f'({to_str(p)})'

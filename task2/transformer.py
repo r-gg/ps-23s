@@ -3,14 +3,7 @@ from typing import List, Dict
 import global_vars
 import copy
 
-fns = {
-    "mult": lambda x, y: x * y,
-    "div": lambda x, y: x / y,
-    "plus": lambda x, y: x + y,
-    "minus": lambda x, y: x - y,
-    # "cond" : lambda x, y, z: y if (x != 0) else z # TODO: cond logic should be implemented in evaluation, the only function that should be used is check cond
-    "check_cond": lambda x: x != 0
-}
+
 
 
 # Note: Bound vars are always passed as they can span multiple levels. In the evaluation all instances will be replaced when instantiated with actual values.
@@ -34,7 +27,7 @@ def eval_basic(basic: Tree, bound_vars: List[str]) -> Dict:
         return {"type": "basic_int", "value": int(basic.children[0].value)}
     elif (basic.data == "basic_word"):
         val = basic.children[0].value
-        if val in fns.keys():
+        if val in global_vars.fns.keys() or val == 'cond':
             # its a core function
             return {"type": "core_fn", "name": val}
 
@@ -97,6 +90,8 @@ def eval_pairs(pairs: Tree, bound_vars: List[str]) -> List[Dict]:
             res.append({"type": "pair", "name": name, "value": inner})
 
             done = True  # just in case
+            break
+        elif curr.data == 'blank_pair':
             break
         else:
             raise Exception("Something is in pairs that shouldn't be there")

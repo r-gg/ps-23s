@@ -33,11 +33,34 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             return eval_expression(global_vars.environment[input['value']], set_vars_in_context)  # replace from the global_vars.environment
         else:
             raise Exception(f"Unknown basic: {input}")
-
+    elif type == 'record':
+        return input
 
     elif type == 'core_fn':  # This is a core function without params
         fn_name = input['name']
+
+        # TODO Add handling of cond function here somewhere
+
+
         if 'evaluation_status' in input.keys() and input['evaluation_status'] == 'partial':
+            if fn_name == 'cond':
+                params = input['params']
+                assert len(params) == 3
+                condition = eval_expression(params[0], set_vars_in_context)
+                is_cond_evaluatable = condition['type'] == 'basic_int' or condition['type'] == 'record'
+                if is_cond_evaluatable:
+                    is_cond_true = (condition['type'] == 'basic_int' and condition['value'] != 0) or \
+                                   (condition['type'] == 'record' and len(condition['pairs']) != 0)
+                    if is_cond_true:
+                        evaluated_param_true = eval_expression(params[1], set_vars_in_context)
+                        return evaluated_param_true
+                    else:
+                        evaluated_param_false = eval_expression(params[2], set_vars_in_context)
+                        return evaluated_param_false
+                else:
+                    return input
+
+
             params: List[Dict] = input['params']
             new_param_was_set = False
             res_params = []
@@ -102,9 +125,11 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             return input
         else:
             evaluated_inner = eval_expression(inner, set_vars_in_context)
-            if evaluated_inner['type'] == 'basic_int':
+
+            if (evaluated_inner['type'] == 'basic_int' or evaluated_inner['type'] == 'record') and inner_type != 'cond' :
                 return evaluated_inner # fully evaluated
             else:
+                # if its cond then also return inner (e.g. if cond evaluates to 1 return x->1)
                 # TODO: Check. Because checking if its partially evaluated is performed above
                 input['inner'] = evaluated_inner # partially evaluated
                 return input
@@ -116,7 +141,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         function = input['function']
         inner_fn_type = function['type']
 
-        param = eval_expression(input['param'], set_vars_in_context)
+        # param = eval_expression(input['param'], set_vars_in_context)
 
         if inner_fn_type == 'fn_call':
             # TODO: Evaluate the inner expr first and then set the parameter and then evaluate this fn call again
@@ -133,6 +158,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             bound_var = function['bound_var']
             new_set_vars_in_context = copy.copy(set_vars_in_context)
 
+            param = eval_expression(input['param'], set_vars_in_context)
             new_set_vars_in_context[bound_var] = param
             res = eval_expression(function, new_set_vars_in_context)
             if (res['type'] == 'anon_fn') and (res['bound_var'] == bound_var):
@@ -150,9 +176,11 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         elif inner_fn_type == 'core_fn':
             fn_name = function['name']
             if 'params' not in function.keys(): # closest param to the function
+                param = eval_expression(input['param'], set_vars_in_context) # first level of cond as well
                 function['params'] = [param]
                 return function
             elif (len(function['params']) == 1) and (fn_name != 'cond'):
+                param = eval_expression(input['param'], set_vars_in_context)
                 params = function['params'] + [param]
                 # otherwise (if its a core_fn) evaluate params and if they are ints evaluate core fn
 
@@ -168,19 +196,33 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             elif (len(function['params']) == 1) and (fn_name == 'cond'): # IF IT IS THE COND
                 # Build further
                 # return fncall with another param added if params length is 1
-                function['params'].append(param)
+                # PARAM NOT EVALUATED YET
+                # The param here is the one which gets returned if condition is True
+                function['params'].append(input['param'])
                 return function
-            elif fn_name == 'cond':
-                params = function['params'] + [param]
+            elif (len(function['params']) == 2) and fn_name == 'cond':
+                params = function['params'] + [input['param']]
                 assert (len(params) == 3) and (fn_name == 'cond')
                 # TODO: Implement
-
+                condition = params[0]
+                is_cond_evaluatable = condition['type'] == 'basic_int' or condition['type'] == 'record'
+                if is_cond_evaluatable:
+                    is_cond_true = (condition['type'] == 'basic_int' and condition['value'] != 0) or \
+                                   (condition['type'] == 'record' and len(condition['pairs']) != 0)
+                    if is_cond_true:
+                        evaluated_param_true = eval_expression(params[1], set_vars_in_context)
+                        return evaluated_param_true
+                    else:
+                        evaluated_param_false = eval_expression(params[2], set_vars_in_context)
+                        return evaluated_param_false
+                else:
+                    function['params'] = params
+                    function['evaluation_status'] = 'partial'
+                    return function
                 # otherwise (if its a core_fn) evaluate params and if they are ints evaluate core fn
                 # TODO: Later add partial evaluation of 'cond' function (if condition is satisfied/not satisfied that one does not require the unused param to be evaluated
                 #       the condition must in any case be evaluated
-                print("Cond happened")
-                pass
             else:
                 print("Core fn in fn call that satisfies nothing probably from the environment !")
-        print("Something slipped")
+        raise Exception("Something slipped")
         pass
