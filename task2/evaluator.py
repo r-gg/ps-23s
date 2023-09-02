@@ -31,9 +31,23 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
     elif type == 'unknown_basic':
         if input['value'] in global_vars.environment.keys():
             return eval_expression(global_vars.environment[input['value']], set_vars_in_context)  # replace from the global_vars.environment
+        elif input['value'] in set_vars_in_context.keys(): # needed for evaluating records
+            return eval_expression(set_vars_in_context[input['value']], set_vars_in_context)
         else:
             raise Exception(f"Unknown basic: {input}")
     elif type == 'record':
+        new_set_vars_in_context = copy.copy(set_vars_in_context)
+        pairs = input['pairs']
+        evaluated_pairs = []
+        for pair in pairs:
+            name = pair['name']
+            val = pair['value']
+            evaluated_pair = eval_expression(val, new_set_vars_in_context)
+            new_set_vars_in_context[name] = evaluated_pair
+            evaluated_pairs.append({"type": "pair",
+                                    "name": name,
+                                    "value": evaluated_pair})
+        input['pairs'] = evaluated_pairs
         return input
 
     elif type == 'core_fn':  # This is a core function without params
@@ -126,7 +140,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         else:
             evaluated_inner = eval_expression(inner, set_vars_in_context)
 
-            if (evaluated_inner['type'] == 'basic_int' or evaluated_inner['type'] == 'record') and inner_type != 'cond' :
+            if (evaluated_inner['type'] == 'basic_int' or evaluated_inner['type'] == 'record'): # and inner_type != 'cond' :
                 return evaluated_inner # fully evaluated
             else:
                 # if its cond then also return inner (e.g. if cond evaluates to 1 return x->1)
@@ -170,8 +184,15 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             if function['value'] in global_vars.environment.keys():
                 input['function'] = global_vars.environment[function['value']] # replace from the global_vars.environment
                 return eval_expression(input, set_vars_in_context)
+            elif function['value'] in set_vars_in_context.keys(): # needed for evaluating records
+                input['function'] = set_vars_in_context[function['value']]
+                return eval_expression(input,set_vars_in_context)
             else:
                 raise Exception(f"Unknown basic: {function}")
+
+        elif inner_fn_type == 'basic_int' or inner_fn_type == 'record': # function already evaluated (probably by a cond) so this arg is redundant
+            # e.g. {a = x->cond 2 1 x} a 2 ----> evaluating a by setting x to 2 is redundant since a=1 already
+            return function
 
         elif inner_fn_type == 'core_fn':
             fn_name = function['name']
@@ -184,7 +205,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                 params = function['params'] + [param]
                 # otherwise (if its a core_fn) evaluate params and if they are ints evaluate core fn
 
-                if all([p['type'] == 'basic_int' for p in params]):  # Can be evaluated
+                if all([p['type'] == 'basic_int' for p in params]):  # Can be evaluated # they all need to be int since its not cond (-> it is an arithmetic operation)
                     args = [p['value'] for p in params]
                     result_int = global_vars.fns[fn_name](*args)
                     return {"type": "basic_int", "value": result_int}

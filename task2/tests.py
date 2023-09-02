@@ -99,10 +99,26 @@ class MyTestCase(unittest.TestCase):
         )
 
 
-        # a gets evaluated in eval_env to 1. it should be a = x->1
+        # a gets evaluated in eval_env to 1. so there is a function call "1 2" in the main -> just returns the 1 (marked as function), 2 is redundant
         self.assertEqual(
             '{a = (x->cond 2 1 x)} 1',
             get_output('{a = x->cond 2 1 x} a 2')
+        )
+
+    """ Records themselves can be evaluated and use aliases later in the record """
+    def advanced_record_evaluation(self):
+        self.assertEqual(
+            '{a = 1, b = (x->plus x 1), c = 3}',
+            get_output('{a = x->cond 2 1 x, b = x->plus x a, c = b 2}')
+        )
+
+
+    def test_list_example(self):
+        self.assertEqual(
+            '{list = (c->(f->(x->cond (c x) {val = x, nxt = list c f (f x)} {}))), reduce = (f->(x->(lst->cond lst (f (reduce f x (lst nxt)) (lst val)) x))), range = (a->(b->list ((x->minus b x)) ((x->plus 1 x)) a)), sum = (lst->reduce ((x->(y->plus x y))) 0 lst)} 12',
+            get_output(
+                '{list = c -> f -> x -> cond (c x) { val = x, nxt = list c f (f x) } {}, reduce = f -> x -> lst -> cond lst (f (reduce f x (lst nxt)) (lst val)) x, range = a -> b -> list (x -> minus b x) (x -> plus 1 x) a, sum = lst -> reduce (x -> y -> plus x y) 0 lst} sum (range 3 6)'
+            )
         )
 
 
