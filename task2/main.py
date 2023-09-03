@@ -1,24 +1,20 @@
 # This is a sample Python script.
 import copy
-
+import json
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
 from lark import Lark, Transformer, v_args, Tree, Token
 
-import numpy as np
-from elements import *
 from transformer import *
 from evaluator import *
 from printer import to_str
 import uuid
+import global_vars
 
 
 def get_new_fn_name() -> str:
     return str(uuid.uuid4())
-
-
-
 
 
 # Parse -> transform into better structure -> evaluate
@@ -27,7 +23,11 @@ def get_new_fn_name() -> str:
 """
     data is the input string ~ well formatted code
 """
+
+
 def get_output(data: str):
+    global_vars.clean_env()
+
     l = Lark('''
                         start: expr
                             | multi_pairs " " expr -> create_env
@@ -51,6 +51,8 @@ def get_output(data: str):
                              | WORD "=" expr   -> create_final_pair
                              | pairs ", " WORD "=" expr  -> create_pair
                              | pairs ", " WORD " = " expr  -> create_pair
+                             | " " -> blank_pair
+                             |  -> blank_pair
 
                         %import common.WORD   // imports from terminal library
                         %import common.INT    // imports from terminal library
@@ -65,6 +67,12 @@ def get_output(data: str):
     # print(to_str(r['env']))
     if r['env'] != {}:
         env_str = to_str(r['env'])
+
+    """  ~ Note ~ 
+    r['env'] is different before evaluation and after which is why env_string is set before. 
+    Since evaluation is in-place, the r['env'] dictionary itself is simplified
+    """
+
     evaluated = eval_expression(r, {})
     # print(evaluated)
     if r['env'] != {}:
@@ -83,4 +91,3 @@ if __name__ == '__main__':
         # test = Function(name="sqr", bound_vars={'x':None},inner_fn=functions['mult'], var_mapping={'x':'x', 'y':'x'})
         # print("Evaluating test:")
         # print(test.evaluate({'x' : Expression(is_fully_evaluated=True, value=2)}))
-
