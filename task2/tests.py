@@ -114,6 +114,7 @@ class MyTestCase(unittest.TestCase):
 
 
     def test_list_example(self):
+        # TODO: Avoid infinite recursion with list referencing itself in its definition.
         self.assertEqual(
             '{list = (c->(f->(x->cond (c x) {val = x, nxt = list c f (f x)} {}))), reduce = (f->(x->(lst->cond lst (f (reduce f x (lst nxt)) (lst val)) x))), range = (a->(b->list ((x->minus b x)) ((x->plus 1 x)) a)), sum = (lst->reduce ((x->(y->plus x y))) 0 lst)} 12',
             get_output(
@@ -121,6 +122,34 @@ class MyTestCase(unittest.TestCase):
             )
         )
 
+    def test_eval_records_as_functions(self):
+        self.assertEqual(
+            '5',
+            get_output('plus ({a = 3} a) 2')
+        )
+
+        self.assertEqual(
+            '{a = {c = 3}, b = plus (a c) 2} 5',
+            get_output('{a = {c = 3}, b = plus (a c) 2} b')
+        )
+
+    def test_lists(self):
+
+        self.assertEqual(
+            '2',
+            get_output('{list = c -> f -> x -> cond (c x) { val = x, nxt = list c f (f x) } {}, range = a -> b -> list (x -> minus b x) (x -> plus 1 x) a} range 1 2')
+        )
+
+
+    def test_variable_scoping_and_higher_order_fns(self):
+        self.assertEqual(
+            '1',
+            get_output('(x -> x) (x -> x) 1')
+        )
+        self.assertEqual(
+            '1',
+            get_output('(x -> (x -> x) 1) 2')
+        )
 
 if __name__ == '__main__':
     unittest.main()

@@ -13,10 +13,6 @@ import uuid
 import global_vars
 
 
-def get_new_fn_name() -> str:
-    return str(uuid.uuid4())
-
-
 # Parse -> transform into better structure -> evaluate
 
 

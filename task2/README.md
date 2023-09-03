@@ -4,11 +4,20 @@
 
 An interpreter for a simple functional programming language.
 
-### Three modes of operation
+### Features
 
-1. Creation mode (Builds functions and saves them to the function registry)
-2. Application mode (Sets the bounded variables inside built structures ~ functions)
-3. Evaluation mode (Evaluates functions **where possible** ~ if all arguments are evaluated to an integer)
+1. Variable scoping (lexical) e.g. (x -> (x -> x) 1) 2 ====> 1
+    Achieved by by adding "---i" at the end of the variable name where i is the number of times the variable has been used in the current scope.
+2. Higher order functions e.g. (x -> x) (y -> y) 1 ====> 1
+3. Partial evaluation
+4. Lazy evaluation
+5. Recursion
+6. Closures (Records/Environments)
+7. Currying
+
+### TODOs
+
+- Remove global env.
 
 ## Usage
 
@@ -20,4 +29,10 @@ $ python3 main.py <filename>
 
 ```bash
 $ pip3 install -r requirements.txt
+```
+
+## Tests
+
+```bash
+$ python3 -m pytest tests.py
 ```
