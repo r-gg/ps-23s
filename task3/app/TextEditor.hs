@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# HLINT ignore "Redundant bracket" #-}
+{-# HLINT ignore "Redundant brace" #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
@@ -22,8 +22,8 @@ import Brick.Widgets.Core
   )
 import qualified Brick.Widgets.Core as C
 import Control.Lens (element)
-import Data.List (find)
-import Data.Maybe (isNothing)
+import Data.List (find, findIndices, isPrefixOf, tails)
+import Data.Maybe (isJust)
 import qualified Data.Text.Zipper as Z hiding (textZipper)
 import qualified Data.Text.Zipper.Generic as Z
 import qualified Data.Text.Zipper.Generic.Words as Z
@@ -70,7 +70,7 @@ theApp =
 
 -- Look of the editor
 theMap :: A.AttrMap
-theMap = A.attrMap V.defAttr [(editAttr, V.white `on` V.black), (bracketAttr, fg V.red)]
+theMap = A.attrMap V.defAttr [(editAttr, V.white `on` V.black), (braceAttr, fg V.red), (msgAttr, fg V.blue), (markAttr, fg V.green)]
 
 -- Event handler of the editor
 appEvent :: T.BrickEvent Name e -> T.EventM Name State ()
@@ -126,10 +126,12 @@ drawUI st = [ui]
 
 -- calls the renderEditor function
 render :: Editor String Name -> T.Widget Name
-render e = if isNothing (lookup (-1) (bracketPairs (unlines (getEditContents e)))) then C.hBox [(messagesViewport ""), renderEditor (syntaxHighlight e) True e] else C.hBox [(messagesViewport "Unbalanced braces"), renderEditor (syntaxHighlight e) True e]
+render e
+  | isJust (lookup (-1) (bracePairs (unlines (getEditContents e)))) = C.vBox [messagesViewport "Unbalanced braces", renderEditor (syntaxHighlight e) True e]
+  | otherwise = C.vBox [messagesViewport "", renderEditor (syntaxHighlight e) True e]
   where
-    messagesViewport msg = viewport SyntaxHighlight T.Vertical (body msg)
-    body msg = C.withDefAttr bracketAttr $ C.hBox [(errorWidget msg)]
+    messagesViewport msg = vLimit 1 $ viewport SyntaxHighlight T.Vertical (body msg)
+    body msg = C.withDefAttr msgAttr $ C.hBox [errorWidget msg]
     errorWidget msg = str $ show msg
 
 -- Turn an editor state value into a widget.
@@ -155,58 +157,72 @@ renderEditor draw foc e =
 syntaxHighlight :: Editor String Name -> [String] -> T.Widget n
 syntaxHighlight e = syntaxHighlight' e 0
 
+-- add syntax highlighting to a row
 syntaxHighlight' :: Editor String Name -> Int -> [String] -> T.Widget n
 syntaxHighlight' e rowPos (s : ss) = syntaxHighlight'' e rowPos 0 s C.<=> syntaxHighlight' e (rowPos + 1) ss
 syntaxHighlight' _ _ [] = str "\n"
 
+-- add syntax highlighting to a column
 syntaxHighlight'' :: Editor String Name -> Int -> Int -> String -> T.Widget n
 syntaxHighlight'' e rowPos colPos (c : cs) = syntaxHighlight''' e rowPos colPos c C.<+> syntaxHighlight'' e rowPos (colPos + 1) cs
 syntaxHighlight'' _ _ _ [] = str "\n"
 
+-- add syntax highlighting to a char
 syntaxHighlight''' :: Editor String Name -> Int -> Int -> Char -> T.Widget n
 syntaxHighlight''' e rowPos colPos c
-  | positionToStringPosition e (getCursorPosition e) == matchingOpeningBracketForPosition e rowPos colPos = C.withAttr bracketAttr (str [c])
-  | positionToStringPosition e (getCursorPosition e) == matchingClosingBracketForPosition e rowPos colPos = C.withAttr bracketAttr (str [c])
+  | positionToStringPosition e (getCursorPosition e) == matchingOpeningbraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
+  | positionToStringPosition e (getCursorPosition e) == matchingClosingbraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
+  | isPartOfMatchingWords e rowPos colPos = C.withAttr markAttr (str [c])
   | otherwise = str [c]
 
+-- count of rows
 rows :: Editor String Name -> Int
 rows e = length (Z.getText $ e ^. editContentsL)
 
+-- count of columns
 cols :: Editor String Name -> Int -> Int
 cols e row = length (currentPositionRow e row)
 
+-- convert the position (i,j) to a position in the flattened string
 positionToStringPosition :: Editor String Name -> (Int, Int) -> Int
-positionToStringPosition e (i, j) = sum [cols e c | c <- [0 .. (i - 1)]] + j
+positionToStringPosition e (i, j) = sum [cols e r | r <- [0 .. i - 1]] + j
 
+-- is the currentposition the cursor position
 isCurrentCursorPosition :: Editor String Name -> Int -> Int -> Bool
 isCurrentCursorPosition e rowPos colPos = fst (getCursorPosition e) == rowPos && snd (getCursorPosition e) == colPos
 
+-- get row string with a index
 currentPositionRowMaybe :: Editor String Name -> Int -> Maybe String
 currentPositionRowMaybe e rowPos = Z.getText (e ^. editContentsL) ^? element rowPos
 
+-- convert the maybe datatype
 currentPositionRow :: Editor String Name -> Int -> String
 currentPositionRow e rowPos =
   case currentPositionRowMaybe e rowPos of
     (Just r) -> r
     Nothing -> []
 
-matchingOpeningBracketForPosition :: Editor String Name -> Int -> Int -> Int
-matchingOpeningBracketForPosition e rowPos colPos =
-  case lookup (positionToStringPosition e (rowPos, colPos)) (bracketPairs (unlines (getEditContents e))) of
+-- search in braces list for the matching opening brace
+matchingOpeningbraceForPosition :: Editor String Name -> Int -> Int -> Int
+matchingOpeningbraceForPosition e rowPos colPos =
+  case lookup (positionToStringPosition e (rowPos, colPos)) (bracePairs (unlines (getEditContents e))) of
     (Just p) -> p
     Nothing -> -1
 
-matchingClosingBracketForPosition :: Editor String Name -> Int -> Int -> Int
-matchingClosingBracketForPosition e rowPos colPos =
-  case searchSndElement (positionToStringPosition e (rowPos, colPos)) (bracketPairs (unlines (getEditContents e))) of
+-- search in braces list for the matching closing brace
+matchingClosingbraceForPosition :: Editor String Name -> Int -> Int -> Int
+matchingClosingbraceForPosition e rowPos colPos =
+  case searchSndElement (positionToStringPosition e (rowPos, colPos)) (bracePairs (unlines (getEditContents e))) of
     (Just p) -> p
     Nothing -> -1
   where
     searchSndElement :: Eq b => b -> [(a, b)] -> Maybe a
     searchSndElement a = fmap fst . find ((== a) . snd)
 
-bracketPairs :: String -> [(Int, Int)]
-bracketPairs = go 0 []
+-- pairs of corresponding braces
+-- unbalanced braces are marked with (-1, -1)
+bracePairs :: String -> [(Int, Int)]
+bracePairs = go 0 []
   where
     go _ (_ : _) [] = [(-1, -1)]
     go j acc ('(' : cs) = go (j + 1) (j : acc) cs
@@ -214,6 +230,37 @@ bracketPairs = go 0 []
     go j (i : is) (')' : cs) = (i, j) : go (j + 1) is cs
     go j acc (_ : cs) = go (j + 1) acc cs
     go _ _ [] = []
+
+-- check if row col position is part of matching words
+isPartOfMatchingWords :: Editor String Name -> Int -> Int -> Bool
+isPartOfMatchingWords e r c = or [positionToStringPosition e (r, c) <? p | p <- matchingWordIndices e]
+
+-- start and end indices of matching words
+matchingWordIndices :: Editor String Name -> [(Int, Int)]
+matchingWordIndices e = [(p, p + length wordToFind - 1) | p <- findPositionOfWord (unlines (getEditContents e)) wordToFind]
+  where
+    wordToFind = currentWord (unlines (getEditContents e)) (positionToStringPosition e (getCursorPosition e))
+
+-- get word at current position
+currentWord :: String -> Int -> String
+currentWord s i
+  | take 1 (drop i s) == [' '] = [' ']
+  | take 1 (drop i s) == ['\n'] = ['\n']
+  | take 1 (drop i s) == ['('] = ['(']
+  | take 1 (drop i s) == [')'] = [')']
+  | otherwise = charBefore s i ++ charAfter s i
+
+-- get chars before position
+charBefore :: String -> Int -> String
+charBefore s i = reverse (takeWhile (\c -> (c /= ' ') && (c /= '\n') && (c /= '(') && (c /= ')')) (reverse (take i s)))
+
+-- get chars after position
+charAfter :: String -> Int -> String
+charAfter s i = takeWhile (\c -> (c /= ' ') && (c /= '\n') && (c /= '(') && (c /= ')')) (take (length s) (drop i s))
+
+-- gets the position of a word
+findPositionOfWord :: String -> String -> [Int]
+findPositionOfWord s w = findIndices (w `isPrefixOf`) (tails s)
 
 -- Apply an editing operation to the editor's contents
 applyEdit :: (Z.TextZipper t -> Z.TextZipper t) -> Editor t n -> Editor t n
@@ -228,8 +275,16 @@ editFocusedAttr :: A.AttrName
 editFocusedAttr = editAttr <> A.attrName "focused"
 
 -- The attribute assigned to a characted when it is ( or )
-bracketAttr :: A.AttrName
-bracketAttr = A.attrName "bracket"
+braceAttr :: A.AttrName
+braceAttr = A.attrName "brace"
+
+-- The attribute assigned to a characted when it is msg
+msgAttr :: A.AttrName
+msgAttr = A.attrName "msg"
+
+-- The attribute assigned to a characted when it is marked
+markAttr :: A.AttrName
+markAttr = A.attrName "mark"
 
 -- Get the contents of the editor.
 getEditContents :: Monoid t => Editor t n -> [t]
@@ -248,3 +303,7 @@ charAtCursor z =
    in if Z.length toRight > 0
         then Just $ Z.take 1 toRight
         else Nothing
+
+-- check if number is between a pair of numbers
+(<?) :: Ord a => a -> (a, a) -> Bool
+(<?) x (mi, ma) = x >= mi && x <= ma
