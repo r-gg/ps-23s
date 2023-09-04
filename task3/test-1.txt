@@ -1,2 +1,1 @@
-minus ((x -> y -> add (mult x x) y) 2 5)
-              ((x -> y -> add (mult x x) y) 2 3)
+{ a = x -> y -> add ( mult x x ) y, b = a 2, c = b 3 }

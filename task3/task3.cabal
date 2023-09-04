@@ -26,7 +26,8 @@ executable task3
 
     -- Modules included in this executable, other than Main.
     other-modules:
-        TextEditor
+        TextEditor,
+        Parser
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

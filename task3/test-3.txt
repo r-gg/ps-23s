@@ -1,6 +1,1 @@
-{
-    list = c -> f -> x ->
-        cond (c x)
-             { val = x, nxt = list c f (f x) }
-             {}
-}
+{ a = x -> y -> add ( mult x x ) y, b = a 2, c = b  3
