@@ -185,7 +185,7 @@ cols e row = length (currentPositionRow e row)
 
 -- convert the position (i,j) to a position in the flattened string
 positionToStringPosition :: Editor String Name -> (Int, Int) -> Int
-positionToStringPosition e (i, j) = sum [cols e r | r <- [0 .. i - 1]] + j
+positionToStringPosition e (i, j) = sum [cols e r + 1 | r <- [0 .. i - 1]] + j
 
 -- is the currentposition the cursor position
 isCurrentCursorPosition :: Editor String Name -> Int -> Int -> Bool
