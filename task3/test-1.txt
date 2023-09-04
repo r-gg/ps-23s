@@ -1,0 +1,2 @@
+minus ((x -> y -> add (mult x x) y) 2 5)
+              ((x -> y -> add (mult x x) y) 2 3)

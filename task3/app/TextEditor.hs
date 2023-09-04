@@ -222,14 +222,14 @@ matchingClosingBraceForPosition e rowPos colPos =
     searchSndElement :: Eq b => b -> [(a, b)] -> Maybe a
     searchSndElement a = fmap fst . find ((== a) . snd)
 
--- search in braces list for the matching opening brace
+-- search in curly braces list for the matching opening curly brace
 matchingOpeningCurlyBraceForPosition :: Editor String Name -> Int -> Int -> Int
 matchingOpeningCurlyBraceForPosition e rowPos colPos =
   case lookup (positionToStringPosition e (rowPos, colPos)) (curlyBracePairs (unlines (getEditContents e))) of
     (Just p) -> p
     Nothing -> -1
 
--- search in braces list for the matching closing brace
+-- search in curly braces list for the matching closing curly brace
 matchingClosingCurlyBraceForPosition :: Editor String Name -> Int -> Int -> Int
 matchingClosingCurlyBraceForPosition e rowPos colPos =
   case searchSndElement (positionToStringPosition e (rowPos, colPos)) (curlyBracePairs (unlines (getEditContents e))) of
@@ -276,12 +276,12 @@ matchingWordIndices e = [(p, p + length wordToFind - 1) | p <- findPositionOfWor
 -- get word at current position
 currentWord :: String -> Int -> String
 currentWord s i
-  | take 1 (drop i s) == [' '] = [' ']
-  | take 1 (drop i s) == ['\n'] = ['\n']
-  | take 1 (drop i s) == ['('] = ['(']
-  | take 1 (drop i s) == [')'] = [')']
-  | take 1 (drop i s) == ['{'] = ['{']
-  | take 1 (drop i s) == ['}'] = ['}']
+  | take 1 (drop i s) == [' '] = []
+  | take 1 (drop i s) == ['\n'] = []
+  | take 1 (drop i s) == ['('] = []
+  | take 1 (drop i s) == [')'] = []
+  | take 1 (drop i s) == ['{'] = []
+  | take 1 (drop i s) == ['}'] = []
   | otherwise = charBefore s i ++ charAfter s i
 
 -- get chars before position

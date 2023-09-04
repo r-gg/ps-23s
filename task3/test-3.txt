@@ -1,0 +1,6 @@
+{
+    list = c -> f -> x ->
+        cond (c x)
+             { val = x, nxt = list c f (f x) }
+             {}
+}
