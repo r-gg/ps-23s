@@ -1,23 +1,24 @@
 module Main where
 
-import Lens.Micro ( (^.) )
+import Lens.Micro ((^.))
 import System.Directory (createDirectoryIfMissing)
+import System.Environment (getArgs)
 import System.FilePath.Posix (takeDirectory)
 import TextEditor
-    ( State(State),
-      Name(Edit),
-      editorState,
-      open,
-      editor,
-      getEditContents )
+  ( Name (Edit),
+    State (State),
+    editor,
+    editorState,
+    getEditContents,
+    open,
+  )
 
 main :: IO ()
 main = do
   -- get filepath as input
-  putStrLn "Please Input Filepath:"
-  fileName <- getLine
+  args <- getArgs
 
-  case fileName of
+  case args of
     -- if filepath is empty --> open with initial state
     [] ->
       do
@@ -27,6 +28,7 @@ main = do
     -- if filepath was given --> open with file content
     _ ->
       do
+        let fileName = head args
         file <- readFile fileName
         editedFile <- TextEditor.open (TextEditor.State (editor Edit Nothing file))
         save fileName editedFile

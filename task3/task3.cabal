@@ -19,14 +19,15 @@ maintainer:         e51905700@student.tuwien.ac.at
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
+extra-source-files: README.md
 
 executable task3
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
     other-modules:
-        TextEditor
+        TextEditor,
+        Parser
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -41,7 +42,6 @@ executable task3
         microlens-mtl,
         microlens-th,
         mtl,
-        parsec,
         text,
         text-conversions,
         text-zipper,

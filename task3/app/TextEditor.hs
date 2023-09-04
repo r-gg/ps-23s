@@ -23,16 +23,16 @@ import Brick.Widgets.Core
 import qualified Brick.Widgets.Core as C
 import Control.Lens (element)
 import Data.List (find, findIndices, isPrefixOf, tails)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, isNothing)
 import qualified Data.Text.Zipper as Z hiding (textZipper)
 import qualified Data.Text.Zipper.Generic as Z
-import qualified Data.Text.Zipper.Generic.Words as Z
 import Data.Tuple (swap)
-import Graphics.Vty (Event (..), Key (..), Modifier (..))
+import Graphics.Vty (Event (..), Key (..))
 import qualified Graphics.Vty as V
 import Lens.Micro (to, (%~), (&), (^.), (^?), _1, _2)
 import Lens.Micro.Mtl (zoom)
 import Lens.Micro.TH (makeLenses)
+import qualified Parser
 
 data Name = Edit | SyntaxHighlight deriving (Ord, Show, Eq)
 
@@ -90,12 +90,6 @@ handleEditorEvent e = do
         _ -> id
 
       handleVtyEvent ev = case ev of
-        EvKey (KChar 'a') [MCtrl] -> Z.gotoBOL
-        EvKey (KChar 'e') [MCtrl] -> Z.gotoEOL
-        EvKey (KChar 'd') [MCtrl] -> Z.deleteChar
-        EvKey (KChar 'd') [MMeta] -> Z.deleteWord
-        EvKey (KChar 'k') [MCtrl] -> Z.killToEOL
-        EvKey (KChar 'u') [MCtrl] -> Z.killToBOL
         EvKey KEnter [] -> Z.breakLine
         EvKey KDel [] -> Z.deleteChar
         EvKey (KChar c) [] | c /= '\t' -> Z.insertChar c
@@ -103,16 +97,9 @@ handleEditorEvent e = do
         EvKey KDown [] -> Z.moveDown
         EvKey KLeft [] -> Z.moveLeft
         EvKey KRight [] -> Z.moveRight
-        EvKey (KChar 'b') [MCtrl] -> Z.moveLeft
-        EvKey (KChar 'f') [MCtrl] -> Z.moveRight
-        EvKey (KChar 'b') [MMeta] -> Z.moveWordLeft
-        EvKey (KChar 'f') [MMeta] -> Z.moveWordRight
         EvKey KBS [] -> Z.deletePrevChar
-        EvKey (KChar 't') [MCtrl] -> Z.transposeChars
         EvKey KHome [] -> Z.gotoBOL
         EvKey KEnd [] -> Z.gotoEOL
-        EvKey (KChar '<') [MMeta] -> Z.gotoBOF
-        EvKey (KChar '>') [MMeta] -> Z.gotoEOF
         _ -> id
 
   T.put $ applyEdit f ed
@@ -128,6 +115,8 @@ drawUI st = [ui]
 render :: Editor String Name -> T.Widget Name
 render e
   | isJust (lookup (-1) (bracePairs (unlines (getEditContents e)))) = C.vBox [messagesViewport "Unbalanced braces", renderEditor (syntaxHighlight e) True e]
+  | isJust (lookup (-1) (curlyBracePairs (unlines (getEditContents e)))) = C.vBox [messagesViewport "Unbalanced curly braces", renderEditor (syntaxHighlight e) True e]
+  | isNothing (Parser.parse (unlines (getEditContents e))) = C.vBox [messagesViewport "Syntax error", renderEditor (syntaxHighlight e) True e]
   | otherwise = C.vBox [messagesViewport "", renderEditor (syntaxHighlight e) True e]
   where
     messagesViewport msg = vLimit 1 $ viewport SyntaxHighlight T.Vertical (body msg)
@@ -170,8 +159,10 @@ syntaxHighlight'' _ _ _ [] = str "\n"
 -- add syntax highlighting to a char
 syntaxHighlight''' :: Editor String Name -> Int -> Int -> Char -> T.Widget n
 syntaxHighlight''' e rowPos colPos c
-  | positionToStringPosition e (getCursorPosition e) == matchingOpeningbraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
-  | positionToStringPosition e (getCursorPosition e) == matchingClosingbraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
+  | positionToStringPosition e (getCursorPosition e) == matchingOpeningBraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
+  | positionToStringPosition e (getCursorPosition e) == matchingClosingBraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
+  | positionToStringPosition e (getCursorPosition e) == matchingOpeningCurlyBraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
+  | positionToStringPosition e (getCursorPosition e) == matchingClosingCurlyBraceForPosition e rowPos colPos = C.withAttr braceAttr (str [c])
   | isPartOfMatchingWords e rowPos colPos = C.withAttr markAttr (str [c])
   | otherwise = str [c]
 
@@ -185,7 +176,7 @@ cols e row = length (currentPositionRow e row)
 
 -- convert the position (i,j) to a position in the flattened string
 positionToStringPosition :: Editor String Name -> (Int, Int) -> Int
-positionToStringPosition e (i, j) = sum [cols e r | r <- [0 .. i - 1]] + j
+positionToStringPosition e (i, j) = sum [cols e r + 1 | r <- [0 .. i - 1]] + j
 
 -- is the currentposition the cursor position
 isCurrentCursorPosition :: Editor String Name -> Int -> Int -> Bool
@@ -203,16 +194,33 @@ currentPositionRow e rowPos =
     Nothing -> []
 
 -- search in braces list for the matching opening brace
-matchingOpeningbraceForPosition :: Editor String Name -> Int -> Int -> Int
-matchingOpeningbraceForPosition e rowPos colPos =
+matchingOpeningBraceForPosition :: Editor String Name -> Int -> Int -> Int
+matchingOpeningBraceForPosition e rowPos colPos =
   case lookup (positionToStringPosition e (rowPos, colPos)) (bracePairs (unlines (getEditContents e))) of
     (Just p) -> p
     Nothing -> -1
 
 -- search in braces list for the matching closing brace
-matchingClosingbraceForPosition :: Editor String Name -> Int -> Int -> Int
-matchingClosingbraceForPosition e rowPos colPos =
+matchingClosingBraceForPosition :: Editor String Name -> Int -> Int -> Int
+matchingClosingBraceForPosition e rowPos colPos =
   case searchSndElement (positionToStringPosition e (rowPos, colPos)) (bracePairs (unlines (getEditContents e))) of
+    (Just p) -> p
+    Nothing -> -1
+  where
+    searchSndElement :: Eq b => b -> [(a, b)] -> Maybe a
+    searchSndElement a = fmap fst . find ((== a) . snd)
+
+-- search in curly braces list for the matching opening curly brace
+matchingOpeningCurlyBraceForPosition :: Editor String Name -> Int -> Int -> Int
+matchingOpeningCurlyBraceForPosition e rowPos colPos =
+  case lookup (positionToStringPosition e (rowPos, colPos)) (curlyBracePairs (unlines (getEditContents e))) of
+    (Just p) -> p
+    Nothing -> -1
+
+-- search in curly braces list for the matching closing curly brace
+matchingClosingCurlyBraceForPosition :: Editor String Name -> Int -> Int -> Int
+matchingClosingCurlyBraceForPosition e rowPos colPos =
+  case searchSndElement (positionToStringPosition e (rowPos, colPos)) (curlyBracePairs (unlines (getEditContents e))) of
     (Just p) -> p
     Nothing -> -1
   where
@@ -231,6 +239,18 @@ bracePairs = go 0 []
     go j acc (_ : cs) = go (j + 1) acc cs
     go _ _ [] = []
 
+-- pairs of corresponding curly braces
+-- unbalanced braces are marked with (-1, -1)
+curlyBracePairs :: String -> [(Int, Int)]
+curlyBracePairs = go 0 []
+  where
+    go _ (_ : _) [] = [(-1, -1)]
+    go j acc ('{' : cs) = go (j + 1) (j : acc) cs
+    go _ [] ('}' : _) = [(-1, -1)]
+    go j (i : is) ('}' : cs) = (i, j) : go (j + 1) is cs
+    go j acc (_ : cs) = go (j + 1) acc cs
+    go _ _ [] = []
+
 -- check if row col position is part of matching words
 isPartOfMatchingWords :: Editor String Name -> Int -> Int -> Bool
 isPartOfMatchingWords e r c = or [positionToStringPosition e (r, c) <? p | p <- matchingWordIndices e]
@@ -244,19 +264,21 @@ matchingWordIndices e = [(p, p + length wordToFind - 1) | p <- findPositionOfWor
 -- get word at current position
 currentWord :: String -> Int -> String
 currentWord s i
-  | take 1 (drop i s) == [' '] = [' ']
-  | take 1 (drop i s) == ['\n'] = ['\n']
-  | take 1 (drop i s) == ['('] = ['(']
-  | take 1 (drop i s) == [')'] = [')']
+  | take 1 (drop i s) == [' '] = []
+  | take 1 (drop i s) == ['\n'] = []
+  | take 1 (drop i s) == ['('] = []
+  | take 1 (drop i s) == [')'] = []
+  | take 1 (drop i s) == ['{'] = []
+  | take 1 (drop i s) == ['}'] = []
   | otherwise = charBefore s i ++ charAfter s i
 
 -- get chars before position
 charBefore :: String -> Int -> String
-charBefore s i = reverse (takeWhile (\c -> (c /= ' ') && (c /= '\n') && (c /= '(') && (c /= ')')) (reverse (take i s)))
+charBefore s i = reverse (takeWhile (\c -> (c /= ' ') && (c /= '\n') && (c /= '(') && (c /= ')') && (c /= '{') && (c /= '}')) (reverse (take i s)))
 
 -- get chars after position
 charAfter :: String -> Int -> String
-charAfter s i = takeWhile (\c -> (c /= ' ') && (c /= '\n') && (c /= '(') && (c /= ')')) (take (length s) (drop i s))
+charAfter s i = takeWhile (\c -> (c /= ' ') && (c /= '\n') && (c /= '(') && (c /= ')') && (c /= '{') && (c /= '}')) (take (length s) (drop i s))
 
 -- gets the position of a word
 findPositionOfWord :: String -> String -> [Int]
