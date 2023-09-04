@@ -18,7 +18,11 @@ An interpreter for a simple functional programming language.
 ### TODOs
 
 - Remove global env.
-
+- Problem:
+  - calling list and cond is always not evaluatable
+    - arguments f and x lost in reduce = a->b-> list c~(x->minus b x) f~(x->plus 1 x) x~a
+      - solution: Store the arguments in the cond dict : {"type" : "core_fn", "some_params": 
+  - Maybe add inherited_vars to eval_expression parameters, so that inner expressions know what vars are bound in that context. right now it is passed only in x->y->z-> ... case 
 ## Usage
 
 ```bash

@@ -5,6 +5,10 @@ from main import *
 
 class MyTestCase(unittest.TestCase):
 
+    def test_currying(self):
+        self.assertEqual('(x->(y->plus x y))',
+                         get_output('x->(y->plus x y)'))
+
     def test_simple_configs(self):
         self.assertEqual(get_output(
             '(x->y->plus x 2) 1'),  # Input

@@ -70,11 +70,13 @@ def get_output(data: str):
     """
 
     evaluated = eval_expression(r, {})
+#    print(f"Env after evaluation: {to_str(r['env'])}")
     # print(evaluated)
     if r['env'] != {}:
         return (env_str + ' ' + to_str(evaluated))
     else:
         return to_str(evaluated)
+
 
 
 # Press the green button in the gutter to run the script.
