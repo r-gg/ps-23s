@@ -118,7 +118,6 @@ class MyTestCase(unittest.TestCase):
 
 
     def test_list_example(self):
-        # TODO: Avoid infinite recursion with list referencing itself in its definition.
         self.assertEqual(
             '{list = (c->(f->(x->cond (c x) {val = x, nxt = list c f (f x)} {}))), reduce = (f->(x->(lst->cond lst (f (reduce f x (lst nxt)) (lst val)) x))), range = (a->(b->list ((x->minus b x)) ((x->plus 1 x)) a)), sum = (lst->reduce ((x->(y->plus x y))) 0 lst)} 12',
             get_output(
@@ -140,7 +139,7 @@ class MyTestCase(unittest.TestCase):
     def test_lists(self):
 
         self.assertEqual(
-            '2',
+            '{list = (c->(f->(x->cond (c x) {val = x, nxt = list c f (f x)} {}))), range = (a->(b->list ((x->minus b x)) ((x->plus 1 x)) a))} {val = 1, nxt = {}}',
             get_output('{list = c -> f -> x -> cond (c x) { val = x, nxt = list c f (f x) } {}, range = a -> b -> list (x -> minus b x) (x -> plus 1 x) a} range 1 2')
         )
 
@@ -153,6 +152,12 @@ class MyTestCase(unittest.TestCase):
         self.assertEqual(
             '1',
             get_output('(x -> (x -> x) 1) 2')
+        )
+
+    def test_create_list_with_range(self):
+        self.assertEqual(
+            '{list = (c->(f->(x->cond (c x) {val = x, nxt = list c f (f x)} {}))), range = (a->(b->list ((x->minus b x)) ((x->plus 1 x)) a))} {val = 1, nxt = {val = 2, nxt = {val = 3, nxt = {val = 4, nxt = {val = 5, nxt = {val = 6, nxt = {}}}}}}}',
+            get_output('{list = c -> f -> x -> cond (c x) { val = x, nxt = list c f (f x) } {}, range = a -> b -> list (x -> minus b x) (x -> plus 1 x) a} range 1 7')
         )
 
 if __name__ == '__main__':

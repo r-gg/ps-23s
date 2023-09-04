@@ -13,7 +13,7 @@ from printer import to_str
 def eval_env(env: Dict):
     pairs = env['pairs']
     for pair in pairs:
-        global_vars.environment[pair['name']] = eval_expression(pair['value'] , {})
+        global_vars.environment[pair['name']] = eval_expression(pair['value'] , {}, [])
 
 
 # renames the variable in the scope of the expr. until its next declaration (i.e. until the next anon_fn)
@@ -71,10 +71,6 @@ def check_for_bound_var_bindings(expr: Dict, bound_var : str) -> bool:
         return False
 def find_val_of_innermost_var(var_name: str, set_vars_in_context: Dict[str, Dict]) -> Dict:
     if var_name in set_vars_in_context.keys():
-        # all_vars_with_this_name = [v for v in set_vars_in_context.keys() if v.startswith(var_name)]
-        # all_vars_with_this_name.sort()
-        # innermost_var = all_vars_with_this_name[-1]
-        # return set_vars_in_context[innermost_var]
         return set_vars_in_context[var_name]
     else:
         raise Exception(f"Variable {var_name} not found in context")
@@ -110,46 +106,33 @@ def variable_occurs_in_expression(var_name: str, expr: Dict) -> bool:
 # Returns new_set_vars_in_context with the new var added
 # TODO: Refactor back to previous state both functions, add and find_val_of_innermost_var
 def add_new_var_to_context(var_name: str, var_value: Dict, new_set_vars_in_context: Dict[str, Dict]) -> Dict[str, Dict]:
-    # if var_name in new_set_vars_in_context.keys():
-    #     all_vars_with_this_name = [v for v in new_set_vars_in_context.keys() if v.startswith(var_name)]
-    #     all_vars_with_this_name.sort()
-    #     depth = len(all_vars_with_this_name)
-    #     if depth == 1:
-    #         new_name = var_name + '---1'
-    #         new_set_vars_in_context[new_name] = var_value
-    #     else:
-    #         new_name = var_name + '---' + str(depth)
-    #         new_set_vars_in_context[new_name] = var_value
-    # else:
-    #     new_set_vars_in_context[var_name] = var_value
-
-    new_set_vars_in_context[var_name] = var_value
+    new_set_vars_in_context[var_name] = copy.deepcopy(var_value)
     return new_set_vars_in_context
 
 # variables that are set in this context are passed to evaluation
-def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
+def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict], bound_vars : List[str], already_renamed : bool = False) -> Dict:
     # Base cases
     type = input['type']
     if type == 'start':
         if input['env'] != {}:
             eval_env(input['env'])
-        return eval_expression(input['expr'], {})
+        return eval_expression(input['expr'], {}, bound_vars)
     elif type == 'basic_int':
         return input
     elif type == 'basic_word_var':
         var_name = input['value']
         if var_name in set_vars_in_context.keys() and input != find_val_of_innermost_var(var_name, set_vars_in_context):
             val = copy.deepcopy(find_val_of_innermost_var(var_name, set_vars_in_context))
-            res = eval_expression(val, set_vars_in_context)
+            res = eval_expression(val, set_vars_in_context, bound_vars)
             return res
         else:
             return input
     elif type == 'unknown_basic':
         if input['value'] in global_vars.environment.keys():
-            return eval_expression(global_vars.environment[input['value']], set_vars_in_context)  # replace from the global_vars.environment
+            return eval_expression(global_vars.environment[input['value']], set_vars_in_context, bound_vars)  # replace from the global_vars.environment
         elif input['value'] in set_vars_in_context.keys(): # needed for evaluating records
             val = copy.deepcopy(find_val_of_innermost_var(input['value'], set_vars_in_context))
-            return eval_expression(val, set_vars_in_context)
+            return eval_expression(val, set_vars_in_context, bound_vars)
         else:
             raise Exception(f"Unknown basic: {input}")
     elif type == 'record':
@@ -159,7 +142,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         for pair in pairs:
             name = pair['name']
             val = pair['value']
-            evaluated_pair = eval_expression(val, new_set_vars_in_context)
+            evaluated_pair = eval_expression(val, new_set_vars_in_context, bound_vars)
             new_set_vars_in_context = add_new_var_to_context(name, evaluated_pair, new_set_vars_in_context)
             evaluated_pairs.append({"type": "pair",
                                     "name": name,
@@ -174,7 +157,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             if fn_name == 'cond':
                 params = input['params']
                 assert len(params) == 3
-                condition = eval_expression(params[0], set_vars_in_context)
+                condition = eval_expression(params[0], set_vars_in_context, bound_vars)
                 is_cond_evaluatable = condition['type'] == 'basic_int' or condition['type'] == 'record'
                 if is_cond_evaluatable:
                     is_cond_true = (condition['type'] == 'basic_int' and condition['value'] != 0) or \
@@ -186,11 +169,10 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                             for name in input['unevaluated_cond_params'].keys():
                                 val = input['unevaluated_cond_params'][name]
                                 # input['unevaluated_cond_params'][name] = eval_expression(val, set_vars_in_context) # update the unevaluated params with this variable instantiation
-                                if variable_occurs_in_expression(name,
-                                                                 params[1]) and name not in set_vars_in_context.keys():
+                                if name not in set_vars_in_context.keys():
                                     new_set_vars_in_context[name] = val  # so it does not overwrite the var from context
 
-                        evaluated_param_true = eval_expression(params[1], new_set_vars_in_context)
+                        evaluated_param_true = eval_expression(params[1], new_set_vars_in_context, bound_vars + list(new_set_vars_in_context.keys()))
                         return evaluated_param_true
                     else:
                         new_set_vars_in_context = set_vars_in_context
@@ -199,11 +181,10 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                             for name in input['unevaluated_cond_params'].keys():
                                 val = input['unevaluated_cond_params'][name]
                                 #input['unevaluated_cond_params'][name] = eval_expression(val, set_vars_in_context) # update the unevaluated params with this variable instantiation
-                                if variable_occurs_in_expression(name,
-                                                                 params[2]) and name not in set_vars_in_context.keys():
+                                if name not in set_vars_in_context.keys():
                                     new_set_vars_in_context[name] = val  # so it does not overwrite the var from context
 
-                        evaluated_param_false = eval_expression(params[2], new_set_vars_in_context)
+                        evaluated_param_false = eval_expression(params[2], new_set_vars_in_context, bound_vars + list(new_set_vars_in_context.keys()))
                         return evaluated_param_false
                 else:
                     return input
@@ -214,7 +195,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             res_params = []
             for p in params:
                 if p['type'] != 'basic_word_var':
-                    evaluated_param = eval_expression(p, set_vars_in_context)
+                    evaluated_param = eval_expression(p, set_vars_in_context, bound_vars)
                     p = evaluated_param
                 # if there was a new param set
                 if p['type'] == 'basic_word_var':
@@ -246,9 +227,19 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
 
     elif type == 'anon_fn':
         # Higher order functions # e.g function as a parameter
+
+        bound_var = input['bound_var']
+
+        if bound_var in bound_vars and not already_renamed: # rename in inner
+            new_name = bound_var + '-' + generate_random_hash()
+            input['bound_var'] = new_name
+            input['inner'] = rename_in_scope(input['inner'], bound_var, new_name)
+            bound_var = new_name
+
+
         inner = input['inner']
         inner_type = inner['type']
-        bound_var = input['bound_var']
+
 
 
         if (inner_type == 'core_fn') and ('evaluation_status' in inner.keys()) and (inner['evaluation_status'] == 'partial'):
@@ -257,7 +248,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             if fn_name == 'cond':
                 params = inner['params']
                 assert len(params) == 3
-                condition = eval_expression(params[0], set_vars_in_context)
+                condition = eval_expression(params[0], set_vars_in_context, bound_vars + [bound_var])
                 is_cond_evaluatable = condition['type'] == 'basic_int' or condition['type'] == 'record'
                 if is_cond_evaluatable:
                     is_cond_true = (condition['type'] == 'basic_int' and condition['value'] != 0) or \
@@ -269,10 +260,10 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                             for name in inner['unevaluated_cond_params'].keys():
                                 val = inner['unevaluated_cond_params'][name]
                                 # inner['unevaluated_cond_params'][name] = eval_expression(val, set_vars_in_context) # update the unevaluated params with this variable instantiation
-                                if variable_occurs_in_expression(name, params[1]) and name not in set_vars_in_context.keys():
+                                if name not in set_vars_in_context.keys():
                                     new_set_vars_in_context[name] = val # so it does not overwrite the var from context
 
-                        evaluated_param_true = eval_expression(params[1], new_set_vars_in_context)
+                        evaluated_param_true = eval_expression(params[1], new_set_vars_in_context, bound_vars + [bound_var] + list(new_set_vars_in_context.keys()))
                         return evaluated_param_true
                     else:
                         new_set_vars_in_context = set_vars_in_context
@@ -281,21 +272,26 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                             for name in inner['unevaluated_cond_params'].keys():
                                 val = inner['unevaluated_cond_params'][name]
                                 # inner['unevaluated_cond_params'][name] = eval_expression(val, set_vars_in_context) # update the unevaluated params with this variable instantiation
-                                if variable_occurs_in_expression(name, params[2]) and name not in set_vars_in_context.keys():
+                                if name not in set_vars_in_context.keys():
                                     new_set_vars_in_context[name] = val  # so it does not overwrite the var from context
 
-                        evaluated_param_false = eval_expression(params[2], new_set_vars_in_context)
+                        evaluated_param_false = eval_expression(params[2], new_set_vars_in_context, bound_vars + [bound_var] + list(new_set_vars_in_context.keys()))
                         return evaluated_param_false
                 else: # Cond not evaluated -> Persist parameters for partial evaluation
                     inner['params'][0] = condition
-                    list_of_bound_vars = input['inherited_bound_vars'] + [bound_var]
+                    list_of_bound_vars = bound_vars + [bound_var]
                     for var in list_of_bound_vars:
-                    # todo: Find bound vars in both cond branches and if their names are in set_vars_in_context, then add set_vars_in_context['name'] -> set_vars_in_context['value'] to unevaluated cond params so that when the condition gets evaluatable, you can add these values to set_vars_in context
-                        var_found_in_params = any([ variable_occurs_in_expression(var, p) for p in inner['params'][1:] ]) # condition is not considered because it always gets evaluated and stays like that
-                        if var_found_in_params and var in set_vars_in_context.keys():
-                            if 'unevaluated_cond_params' not in inner.keys():
-                                inner['unevaluated_cond_params'] : Dict = {}
+                        if 'unevaluated_cond_params' not in inner.keys():
+                            inner['unevaluated_cond_params'] : Dict = {}
+                        if var in set_vars_in_context.keys():
                             inner['unevaluated_cond_params'][var] = copy.deepcopy(set_vars_in_context[var])
+
+                    # todo: Find bound vars in both cond branches and if their names are in set_vars_in_context, then add set_vars_in_context['name'] -> set_vars_in_context['value'] to unevaluated cond params so that when the condition gets evaluatable, you can add these values to set_vars_in context
+                    #     var_found_in_params = any([ variable_occurs_in_expression(var, p) for p in inner['params'][1:] ]) # condition is not considered because it always gets evaluated and stays like that
+                    #     if var_found_in_params and var in set_vars_in_context.keys():
+                    #         if 'unevaluated_cond_params' not in inner.keys():
+                    #             inner['unevaluated_cond_params'] : Dict = {}
+                    #         inner['unevaluated_cond_params'][var] = copy.deepcopy(set_vars_in_context[var])
 
                     # for uneval_var in inner['unevaluated_cond_params'].keys():
                     #     for var in set_vars_in_context.keys():
@@ -310,7 +306,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
             res_params = []
             for p in params:
                 if p['type'] != 'basic_word_var':
-                    evaluated_param = eval_expression(p, set_vars_in_context)
+                    evaluated_param = eval_expression(p, set_vars_in_context, bound_vars + [bound_var])
                     p = evaluated_param
                 # if there was a new param set
                 if p['type'] == 'basic_word_var':
@@ -333,7 +329,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
 
             return input
         else:
-            evaluated_inner = eval_expression(inner, set_vars_in_context)
+            evaluated_inner = eval_expression(inner, set_vars_in_context, bound_vars + [bound_var])
 
             if (evaluated_inner['type'] == 'basic_int' or evaluated_inner['type'] == 'record'): # and inner_type != 'cond' :
                 return evaluated_inner # fully evaluated
@@ -355,46 +351,48 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         if inner_fn_type == 'fn_call':
             # TODO: Evaluate the inner expr first and then set the parameter and then evaluate this fn call again
             # Keep evaluating until the inner fn type changes to anon_fn or core_fn
-            input['function'] = eval_expression(function, set_vars_in_context)
+            input['function'] = eval_expression(function, set_vars_in_context, bound_vars)
 
             # Inner function can also return an int? TODO
 
             # if ('evaluation_status' in input['function'].keys()) and input['function']['evaluation_status'] == 'partial':
             #     return input['function']
-            return eval_expression(input, set_vars_in_context)
+            return eval_expression(input, set_vars_in_context, bound_vars)
 
         elif inner_fn_type == 'anon_fn':
             bound_var = function['bound_var']
             new_set_vars_in_context = copy.deepcopy(set_vars_in_context)
 
-            param = eval_expression(input['param'], set_vars_in_context)
-            if check_for_bound_var_bindings(param, bound_var) or (param['type'] == 'basic_word_var' and param['value'] == bound_var):
+            param = eval_expression(input['param'], set_vars_in_context, bound_vars)
+            if bound_var in bound_vars: # rename in inner
                 new_name = bound_var + '-' + generate_random_hash()
                 function['bound_var'] = new_name
                 function['inner'] = rename_in_scope(function['inner'], bound_var, new_name)
+                already_renamed = True
                 bound_var = new_name
 
 
 
+
             # going through the next anon_fns and renaming the bound_var if it occurs in this context
-            innermost_expr = function
-            while True:
+            # innermost_expr = function
+            # while True:
+            #
+            #     if innermost_expr['type'] == 'anon_fn':
+            #         if innermost_expr['bound_var'] in set_vars_in_context.keys():
+            #             curr_var = innermost_expr['bound_var']
+            #             new_name = curr_var + '-' + generate_random_hash()
+            #             innermost_expr['bound_var'] = new_name
+            #             innermost_expr['inner'] = rename_in_scope(innermost_expr['inner'], curr_var, new_name)
+            #         innermost_expr = innermost_expr['inner']
+            #     else:
+            #         break
 
-                if innermost_expr['type'] == 'anon_fn':
-                    if innermost_expr['bound_var'] in set_vars_in_context.keys():
-                        curr_var = innermost_expr['bound_var']
-                        new_name = curr_var + '-' + generate_random_hash()
-                        innermost_expr['bound_var'] = new_name
-                        innermost_expr['inner'] = rename_in_scope(innermost_expr['inner'], curr_var, new_name)
-                    innermost_expr = innermost_expr['inner']
-                else:
-                    break
 
-
-            bound_var = function['bound_var'] # again because it might be re-set
+            # bound_var = function['bound_var'] # again because it might be re-set
 
             new_set_vars_in_context = add_new_var_to_context(bound_var, param, new_set_vars_in_context)
-            res = eval_expression(function, new_set_vars_in_context)
+            res = eval_expression(function, new_set_vars_in_context, bound_vars, already_renamed)
             if (res['type'] == 'anon_fn') and (res['bound_var'] == bound_var):
                 return res['inner']
             else:
@@ -403,11 +401,11 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         elif inner_fn_type == 'unknown_basic':
             if function['value'] in global_vars.environment.keys():
                 input['function'] = copy.deepcopy(global_vars.environment[function['value']]) # replace from the global_vars.environment
-                return eval_expression(input, set_vars_in_context)
+                return eval_expression(input, set_vars_in_context, bound_vars)
             elif function['value'] in set_vars_in_context.keys(): # needed for evaluating records
                 val = copy.deepcopy(find_val_of_innermost_var(function['value'], set_vars_in_context))
                 input['function'] = val
-                return eval_expression(input,set_vars_in_context)
+                return eval_expression(input,set_vars_in_context, bound_vars)
             else:
                 raise Exception(f"Unknown basic: {function}")
 
@@ -426,13 +424,13 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                 val = find_val_of_innermost_var(var_name, set_vars_in_context)
                 function = copy.deepcopy(val)
                 input['function'] = function
-                res = eval_expression(input, set_vars_in_context)
+                res = eval_expression(input, set_vars_in_context, bound_vars)
                 return res
             elif var_name in global_vars.environment.keys():
                 val = copy.deepcopy(global_vars.environment[var_name])
                 function = val
                 input['function'] = function
-                res = eval_expression(input, set_vars_in_context)
+                res = eval_expression(input, set_vars_in_context, bound_vars)
                 return res
             else:
                 return input
@@ -440,11 +438,11 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
         elif inner_fn_type == 'core_fn':
             fn_name = function['name']
             if 'params' not in function.keys(): # closest param to the function
-                param = eval_expression(input['param'], set_vars_in_context) # first level of cond as well
+                param = eval_expression(input['param'], set_vars_in_context, bound_vars) # first level of cond as well
                 function['params'] = [param]
                 return function
             elif (len(function['params']) == 1) and (fn_name != 'cond'):
-                param = eval_expression(input['param'], set_vars_in_context)
+                param = eval_expression(input['param'], set_vars_in_context, bound_vars)
                 params = function['params'] + [param]
                 # otherwise (if its a core_fn) evaluate params and if they are ints evaluate core fn
 
@@ -480,11 +478,10 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                             for name in function['unevaluated_cond_params'].keys():
                                 val = function['unevaluated_cond_params'][name]
                                 # function['unevaluated_cond_params'][name] = eval_expression(val, set_vars_in_context) # update the unevaluated params with this variable instantiation
-                                if variable_occurs_in_expression(name,
-                                                                 params[1]) and name not in set_vars_in_context.keys():
+                                if name not in set_vars_in_context.keys():
                                     new_set_vars_in_context[name] = val  # so it does not overwrite the var from context
 
-                        evaluated_param_true = eval_expression(params[1], new_set_vars_in_context)
+                        evaluated_param_true = eval_expression(params[1], new_set_vars_in_context, bound_vars + list(new_set_vars_in_context.keys()))
                         return evaluated_param_true
                     else:
                         new_set_vars_in_context = set_vars_in_context
@@ -493,11 +490,10 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict]) -> Dict:
                             for name in function['unevaluated_cond_params'].keys():
                                 val = function['unevaluated_cond_params'][name]
                                 #function['unevaluated_cond_params'][name] = eval_expression(val, set_vars_in_context) # update the unevaluated params with this variable instantiation
-                                if variable_occurs_in_expression(name,
-                                                                 params[2]) and name not in set_vars_in_context.keys():
+                                if name not in set_vars_in_context.keys():
                                     new_set_vars_in_context[name] = val  # so it does not overwrite the var from context
 
-                        evaluated_param_false = eval_expression(params[2], new_set_vars_in_context)
+                        evaluated_param_false = eval_expression(params[2], new_set_vars_in_context, bound_vars + list(new_set_vars_in_context.keys()))
                         return evaluated_param_false
                 else:
                     function['params'] = params

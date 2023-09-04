@@ -69,7 +69,7 @@ def get_output(data: str):
     Since evaluation is in-place, the r['env'] dictionary itself is simplified
     """
 
-    evaluated = eval_expression(r, {})
+    evaluated = eval_expression(r, {}, [])
 #    print(f"Env after evaluation: {to_str(r['env'])}")
     # print(evaluated)
     if r['env'] != {}:
