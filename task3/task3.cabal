@@ -19,7 +19,7 @@ maintainer:         e51905700@student.tuwien.ac.at
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
+extra-source-files: README.md
 
 executable task3
     main-is:          Main.hs
