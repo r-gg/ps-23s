@@ -1,9 +1,4 @@
-# This is a sample Python script.
-import copy
-import json
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
+import sys
 from lark import Lark, Transformer, v_args, Tree, Token
 
 from transformer import *
@@ -81,8 +76,12 @@ def get_output(data: str):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        filename = sys.argv[1]
+    else:
+        filename = 'test.txt'
     # read text file
-    with open('test.txt', 'r') as file:
+    with open(filename, 'r') as file:
         data = file.read()
         print(get_output(data))
 

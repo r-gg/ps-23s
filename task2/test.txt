@@ -1,1 +1,1 @@
-{list = c -> f -> x -> cond (c x) { val = x, nxt = list c f (f x) } {}, range = a -> b -> list (x -> minus b x) (x -> plus 1 x) a} range 1 2
+{list = c -> f -> x -> cond (c x) { val = x, nxt = list c f (f x) } {}, reduce = f -> x -> lst -> cond lst (f (reduce f x (lst nxt)) (lst val)) x, range = a -> b -> list (x -> minus b x) (x -> plus 1 x) a, prod = lst -> reduce (x -> y -> mult x y) 1 lst} {fac = n -> prod (range 1 n)} fac 5
