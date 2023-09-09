@@ -1,12 +1,10 @@
 import sys
-from lark import Lark, Transformer, v_args, Tree, Token
+from lark import Lark
 
 from transformer import *
 from evaluator import *
 from printer import to_str
-import uuid
 import global_vars
-
 
 # Parse -> transform into better structure -> evaluate
 
@@ -65,13 +63,12 @@ def get_output(data: str):
     """
 
     evaluated = eval_expression(r, {}, [])
-#    print(f"Env after evaluation: {to_str(r['env'])}")
+    #    print(f"Env after evaluation: {to_str(r['env'])}")
     # print(evaluated)
     if r['env'] != {}:
-        return (env_str + ' ' + to_str(evaluated))
+        return env_str + ' ' + to_str(evaluated)
     else:
         return to_str(evaluated)
-
 
 
 # Press the green button in the gutter to run the script.

@@ -224,7 +224,7 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict], bound_var
                 condition = eval_expression(params[0], set_vars_in_context, bound_vars + [bound_var])
                 is_cond_evaluatable = condition['type'] == 'basic_int' or condition['type'] == 'record'
                 if is_cond_evaluatable:
-                    return handle_condition_evaluatable(inner, params, condition, set_vars_in_context, bound_vars,)
+                    return handle_condition_evaluatable(inner, params, condition, set_vars_in_context, bound_vars, )
                 else:  # Cond not evaluated -> Persist parameters for partial evaluation
                     inner['params'][0] = condition
                     list_of_bound_vars = bound_vars + [bound_var]
@@ -331,7 +331,8 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict], bound_var
                     name = pair['name']
                     val = pair['value']
                     new_set_vars_in_context = add_new_var_to_context(name, val, new_set_vars_in_context)
-                return eval_expression(param, new_set_vars_in_context, bound_vars, already_renamed) # Referencing something that is not an alias in the record. e.g. {nxt = 1, val = 2} 3
+                return eval_expression(param, new_set_vars_in_context, bound_vars,
+                                       already_renamed)  # Referencing something that is not an alias in the record. e.g. {nxt = 1, val = 2} 3
         elif inner_fn_type == 'basic_word_var':
             var_name = function['value']
             if var_name in set_vars_in_context.keys():
@@ -395,23 +396,29 @@ def eval_expression(input: Dict, set_vars_in_context: Dict[str, Dict], bound_var
         raise Exception("Something came in fn_call which shouldnt be here. Its type is: " + input['function']['type'])
         pass
 
+
 """handles the condition if all three parameters are present"""
+
+
 def handle_full_cond(input: Dict, set_vars_in_context: Dict[str, Dict], bound_vars: List[str],
-                    already_renamed: bool = False) -> Dict:
+                     already_renamed: bool = False) -> Dict:
     params = input['params']
     assert len(params) == 3
     condition = eval_expression(params[0], set_vars_in_context, bound_vars)
     is_cond_evaluatable = condition['type'] == 'basic_int' or condition['type'] == 'record'
     if is_cond_evaluatable:
-        return handle_condition_evaluatable(input,params,condition,set_vars_in_context,bound_vars,already_renamed)
+        return handle_condition_evaluatable(input, params, condition, set_vars_in_context, bound_vars)
     else:
         if 'evaluation_status' not in input.keys():
             input['evaluation_status'] = 'partial'
         return input
 
+
 """When the condition is evaluatable it returns one of the two parameters (evaluated) accordingly"""
-def handle_condition_evaluatable(input: Dict, params: List[Dict], condition : Dict, set_vars_in_context: Dict[str, Dict], bound_vars: List[str],
-                    already_renamed: bool = False) -> Dict:
+
+
+def handle_condition_evaluatable(input: Dict, params: List[Dict], condition: Dict, set_vars_in_context: Dict[str, Dict],
+                                 bound_vars: List[str]) -> Dict:
     is_cond_true = (condition['type'] == 'basic_int' and condition['value'] != 0) or \
                    (condition['type'] == 'record' and len(condition['pairs']) != 0)
     if is_cond_true:

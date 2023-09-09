@@ -1,9 +1,0 @@
-(x->y->plus x 2) 1 ====> (y->3) ==> 3
-
-(x->y->plus x y) 1 ===> (y->plus 1 y)
-
-(x->y->plus (mult x x) y) 1 2 ===> 3
-
-(x->y->plus (mult x x) y) 2 2 ===> 6
-
-{a = x->plus x x, b = a 2} b ===> {a = (x->plus x x), b = (x->plus x x) 2} 4
