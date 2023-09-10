@@ -1,8 +1,8 @@
-#How to build
+# How to build
 make
 
-#How to run
+# How to run
 ./calc
 
-#How to test
+# How to test
 make test
