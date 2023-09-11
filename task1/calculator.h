@@ -32,6 +32,9 @@ public:
   void run_test(const std::string &input);
 
   //visual aid
+  bool printEnabled = true;
+  void disablePrint();
+  void enablePrint();
   std::string outStack;
   void printEverything();
   std::ostream &printStack(std::ostream &out, bool brackets,

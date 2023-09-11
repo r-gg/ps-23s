@@ -97,6 +97,9 @@ std::variant<int, double, std::string> Calculator::topValueFromStack()
 
 int Calculator::getStackSize() { return dataStack.size(); }
 
+void Calculator::disablePrint() { printEnabled = false; }
+void Calculator::enablePrint() { printEnabled = true; } 
+
 // modes (-1: lt, 0: e, 1: gt)
 template <typename T>
 bool Calculator::compareNumbersHelper(T first, T second, int mode)
@@ -477,7 +480,8 @@ void Calculator::performNullCheck()
         }
         else if (std::holds_alternative<double>(topValue))
         {
-            pushValueToStack((int)std::get<double>(topValue) == 0);
+            pushValueToStack((int)std::get<double>(topValue) > -epsilon &&
+                             (int)std::get<double>(topValue) < epsilon);
         }
         else if (std::holds_alternative<std::string>(topValue) &&
                  std::get<std::string>(topValue).empty())
@@ -977,15 +981,15 @@ void Calculator::writeOutput()
         auto topValue = popValueFromStack();
         if (std::holds_alternative<int>(topValue))
         {
-            outputStream << std::get<int>(topValue);
+            outputStream << std::get<int>(topValue) << std::endl;
         }
         else if (std::holds_alternative<double>(topValue))
         {
-            outputStream << std::get<double>(topValue);
+            outputStream << std::get<double>(topValue) << std::endl;
         }
         else if (std::holds_alternative<std::string>(topValue))
         {
-            outputStream << std::get<std::string>(topValue);
+            outputStream << std::get<std::string>(topValue) << std::endl;
         }
         else
         {
@@ -1044,7 +1048,7 @@ void Calculator::run()
         else if (std::holds_alternative<double>(registerSet['a']))
             commandStream = std::to_string(std::get<double>(registerSet['a']));
     }
-
+    
     while (true)
     {
         if (commandStream.empty())
@@ -1072,6 +1076,7 @@ void Calculator::run()
         {
             executeCommand(inputChar);
         }
+        if(printEnabled)
         printEverything();
     }
 
