@@ -1,5 +1,8 @@
 #include "calculator.h"
 
+//Here you can find the implementation of the calculator
+//method by method
+
 std::variant<int, double, std::string> Calculator::getRegister(char reg)
 {
     return registerSet[reg];
@@ -730,6 +733,9 @@ void Calculator::performDecimalPlaceConstructionMode(char inputChar)
 
 void Calculator::performStringConstructionMode(char inputChar)
 {
+    // Corner case for open and closed bracket
+    // For every open bracket we increase the oprationMode
+    // and vice versa for closed bracket
     if (inputChar == '(')
     {
         // check if the value on top of the stack is open bracket, if yes modify that value by adding the open bracket
@@ -772,6 +778,7 @@ void Calculator::performStringConstructionMode(char inputChar)
         }
     }
 }
+
 
 void Calculator::executeCommand(char inputChar)
 {
@@ -1036,6 +1043,13 @@ void Calculator::run_test(const std::string &input)
     outStack = ss.str();
 }
 
+
+// Run the calculator
+// This function will never return
+// It will throw an exception if there is an error
+// Firstly, the contents of register a will be loaded in to the command stream
+// After this, the calculator enters an infinite loop an constantly asks for
+// input from the user. 
 void Calculator::run()
 {
     // get string from register a
@@ -1055,11 +1069,13 @@ void Calculator::run()
         {
             std::cout << "Command stream is empty, please enter new command" << std::endl;
             getline(std::cin, commandStream);
+            printEverything();
         }
 
         char inputChar = commandStream[0];
         commandStream = commandStream.substr(1);
 
+        //Depending on the operation mode the calculator logic branches off
         if (operationMode > 0)
         {
             performStringConstructionMode(inputChar);

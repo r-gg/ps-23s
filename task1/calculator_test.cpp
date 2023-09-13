@@ -135,6 +135,8 @@ TEST(SpecificationTests, EpsilonTestGreaterFalse)
   ASSERT_EQ(calculator.outStack, "0");
 }
 
+// Integration tests meant to try out multiple functionalities at a time
+
 TEST(IntegrationTests, BasicAddition)
 {
   Calculator calculator;

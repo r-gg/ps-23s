@@ -15,7 +15,8 @@
 class Calculator
 {
 public:
-  //calculator architecture
+  //calculator architecture as given in the specification
+  //the initial idea was to use union but variant proved much more versatile
   std::string commandStream;
   int operationMode;
   std::stack<std::variant<int, double, std::string>> dataStack;
@@ -25,13 +26,14 @@ public:
 
   double epsilon = 0.1;
 
-  //for testing purposes
+  //methods used for testing purposes
   std::variant<int, double, std::string> getRegister(char reg);
   void setRegister(char reg, std::variant<int, double, std::string> value);
   void setInitialDataStack(std::stack<std::variant<int, double, std::string>> stack);
   void run_test(const std::string &input);
 
-  //visual aid
+  //in order to follow the data stack and command stream state they are printed 
+  //(or not depending on the printEnabled flag)
   bool printEnabled = true;
   void disablePrint();
   void enablePrint();
@@ -41,6 +43,7 @@ public:
                            bool endline);
   void printCommandStream();
 
+  //private methods used to carry out logic
   private:
   void pushValueToStack(std::variant<int, double, std::string> value);
   std::variant<int, double, std::string> popValueFromStack();
