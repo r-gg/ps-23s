@@ -1,8 +1,8 @@
-# Task 2
+# Functional Language interpreter in Python
 
 ## Description
 
-An interpreter for a simple functional programming language.
+An interpreter for a simple functional programming language in Python. See `Task_description_2.pdf` for full details about the implementation.
 
 ### Features
 
